@@ -823,6 +823,45 @@
         </div>
     </div>
 
+    <!-- Trip Settings Modal -->
+    <div id="modal-trip-settings" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Trip Settings</h3>
+                <button class="btn-icon" onclick="ui.hideModal('modal-trip-settings')"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <form id="form-trip-settings">
+                    <div class="form-group">
+                        <label class="form-label">Trip Name</label>
+                        <input type="text" id="ts-name" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Destination</label>
+                        <input type="text" id="ts-dest" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Status</label>
+                        <select id="ts-status" class="form-control">
+                            <option value="Active">Active</option>
+                            <option value="Archived">Archived</option>
+                        </select>
+                    </div>
+                </form>
+                <hr class="my-6 border-color">
+                <div class="p-4 rounded-lg border" style="background-color: var(--bg-base); border-color: var(--danger-color);" id="ts-danger-zone">
+                    <h4 style="color: var(--danger-color);" class="font-bold mb-2">Danger Zone</h4>
+                    <p class="text-sm text-secondary mb-4">Deleting a trip will permanently remove it for all members. This cannot be undone.</p>
+                    <button class="btn btn-danger w-full" onclick="app.deleteTrip()">Delete Trip</button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="ui.hideModal('modal-trip-settings')">Cancel</button>
+                <button class="btn btn-primary" onclick="app.submitTripSettings()">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Join Trip Modal -->
     <div id="modal-join-trip" class="modal-overlay">
         <div class="modal-content">
@@ -1155,6 +1194,16 @@
                         document.getElementById('app-shell').classList.remove('hidden');
                         ui.showView('view-home');
                         app.loadMyTrips();
+
+                        // Handle deep linking for join codes
+                        const urlParams = new URLSearchParams(window.location.search);
+                        const joinCode = urlParams.get('join');
+                        if (joinCode) {
+                            ui.showModal('modal-join-trip');
+                            document.getElementById('jt-code').value = joinCode;
+                            // Clean up URL without reloading
+                            window.history.replaceState({}, document.title, window.location.pathname);
+                        }
                     } else {
                         state.user = null;
                         ui.clearUnsubscribers();
@@ -1380,6 +1429,74 @@
                     ui.setLoading(false);
                     ui.toast(e.message, 'error');
                 }
+            },
+
+            openTripSettings: () => {
+                if(!['SUPER_ADMIN', 'ADMIN'].includes(state.role)) {
+                    return ui.toast('Only admins can edit trip settings', 'error');
+                }
+                
+                document.getElementById('ts-name').value = state.currentTrip.tripName;
+                document.getElementById('ts-dest').value = state.currentTrip.destination || '';
+                document.getElementById('ts-status').value = state.currentTrip.status;
+
+                // Only super admins can delete
+                document.getElementById('ts-danger-zone').style.display = (state.role === 'SUPER_ADMIN') ? 'block' : 'none';
+
+                ui.showModal('modal-trip-settings');
+            },
+
+            submitTripSettings: async () => {
+                if(!['SUPER_ADMIN', 'ADMIN'].includes(state.role)) return;
+
+                const name = document.getElementById('ts-name').value;
+                const dest = document.getElementById('ts-dest').value;
+                const status = document.getElementById('ts-status').value;
+
+                ui.setLoading(true);
+                try {
+                    await updateDoc(doc(db, 'trips', state.currentTripId), {
+                        tripName: name,
+                        destination: dest,
+                        status: status
+                    });
+                    
+                    // Update local state to reflect instantly before snapshot
+                    state.currentTrip.tripName = name;
+                    state.currentTrip.destination = dest;
+                    state.currentTrip.status = status;
+                    
+                    // Update header UI manually to avoid full reload
+                    document.getElementById('td-name').innerText = name;
+                    document.getElementById('td-dest').innerText = dest || 'No destination set';
+                    const sb = document.getElementById('td-status-badge');
+                    sb.innerText = status;
+                    sb.className = `badge badge-${status === 'Archived' ? 'archived' : 'active'}`;
+                    
+                    ui.toast('Trip settings updated');
+                    ui.hideModal('modal-trip-settings');
+                } catch(e) {
+                    ui.toast(e.message, 'error');
+                }
+                ui.setLoading(false);
+            },
+
+            deleteTrip: async () => {
+                if(state.role !== 'SUPER_ADMIN') return;
+                
+                const conf = prompt(`To delete this trip, type the trip name "${state.currentTrip.tripName}"`);
+                if(conf !== state.currentTrip.tripName) return;
+
+                ui.setLoading(true);
+                try {
+                    await deleteDoc(doc(db, 'trips', state.currentTripId));
+                    ui.toast('Trip deleted permanently');
+                    ui.hideModal('modal-trip-settings');
+                    app.navigate('home');
+                } catch(e) {
+                    ui.toast(e.message, 'error');
+                }
+                ui.setLoading(false);
             },
 
             copyJoinCode: () => {
@@ -1920,7 +2037,7 @@
                     text += `All balances are settled! 🎉\n`;
                 }
 
-                text += `\nLink: https://yourdomain.com/join/${state.currentTrip.joinCode}`;
+                text += `\nLink: ${window.location.origin}?join=${state.currentTrip.joinCode}`;
                 
                 const encoded = encodeURIComponent(text);
                 window.open(`https://wa.me/?text=${encoded}`, '_blank');
