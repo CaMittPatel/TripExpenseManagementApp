@@ -70,7 +70,7 @@
         }
 
         match /tripMembers/{memberId} {
-          allow read: if isSignedIn() && isTripMember(resource.data.tripId);
+          allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isTripMember(resource.data.tripId));
           allow create: if isSignedIn();
           allow update, delete: if isSignedIn() && isAdmin(resource.data.tripId);
         }
