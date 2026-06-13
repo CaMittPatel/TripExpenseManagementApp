@@ -479,11 +479,13 @@
         /* Login Screen Special */
         .login-wrapper {
             min-height: 100vh;
-            display: flex;
             align-items: center;
             justify-content: center;
             background: linear-gradient(135deg, var(--bg-base) 0%, var(--bg-surface) 100%);
             padding: 1rem;
+        }
+        .login-wrapper.active {
+            display: flex;
         }
         .login-card {
             max-width: 400px;
@@ -1147,8 +1149,9 @@
                             }
                         } catch(e) { console.warn("Failed to write user doc", e); }
                         
-                        document.getElementById('nav-user-name').innerText = user.displayName.split(' ')[0];
-                        document.getElementById('nav-user-img').src = user.photoURL || `https://ui-avatars.com/api/?name=${user.displayName}`;
+                        const userName = user.displayName || 'User';
+                        document.getElementById('nav-user-name').innerText = userName.split(' ')[0];
+                        document.getElementById('nav-user-img').src = user.photoURL || `https://ui-avatars.com/api/?name=${userName}`;
                         document.getElementById('app-shell').classList.remove('hidden');
                         ui.showView('view-home');
                         app.loadMyTrips();
