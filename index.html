@@ -728,7 +728,7 @@
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div class="card">
-                            <h3 class="font-semibold mb-4 border-b pb-2 border-color">Recent Expenses</h3>
+                            <h3 class="font-semibold mb-4 border-b pb-2 border-color">Recent Transactions</h3>
                             <div id="list-recent-expenses" class="data-list"></div>
                         </div>
                         <div class="card">
@@ -1085,17 +1085,17 @@
                     <button class="btn-icon ml-2" onclick="ui.hideModal('modal-detailed-ledger')"><i class="fa-solid fa-xmark"></i></button>
                 </div>
             </div>
-            <div class="modal-body" style="overflow-x: auto; max-height: 60vh;">
+            <div class="modal-body" style="overflow-x: auto; max-height: 60vh; padding: 0;">
                 <table id="detailed-ledger-table" class="w-full text-left border-collapse" style="min-width: 600px;">
-                    <thead>
+                    <thead class="bg-surface sticky top-0 shadow-sm" style="z-index: 10;">
                         <tr class="border-b border-color text-secondary text-sm">
-                            <th class="py-2 px-3">Date</th>
-                            <th class="py-2 px-3">Category</th>
-                            <th class="py-2 px-3">Narration</th>
-                            <th class="py-2 px-3 text-right">Amount</th>
-                            <th class="py-2 px-3 text-right">Debit</th>
-                            <th class="py-2 px-3 text-right">Credit</th>
-                            <th class="py-2 px-3 text-right">Balance</th>
+                            <th class="py-3 px-4 border-r border-color text-left font-semibold">Date</th>
+                            <th class="py-3 px-4 border-r border-color text-left font-semibold">Category</th>
+                            <th class="py-3 px-4 border-r border-color text-left font-semibold">Narration</th>
+                            <th class="py-3 px-4 border-r border-color text-right font-semibold">Amount</th>
+                            <th class="py-3 px-4 border-r border-color text-right font-semibold">Debit</th>
+                            <th class="py-3 px-4 border-r border-color text-right font-semibold">Credit</th>
+                            <th class="py-3 px-4 text-right font-semibold">Balance</th>
                         </tr>
                     </thead>
                     <tbody id="detailed-ledger-tbody" class="text-sm">
@@ -1120,15 +1120,15 @@
                     <button class="btn-icon ml-2" onclick="ui.hideModal('modal-stat-breakdown')"><i class="fa-solid fa-xmark"></i></button>
                 </div>
             </div>
-            <div class="modal-body" style="overflow-x: auto; max-height: 60vh;">
+            <div class="modal-body" style="overflow-x: auto; max-height: 60vh; padding: 0;">
                 <table id="stat-breakdown-table" class="w-full text-left border-collapse" style="min-width: 500px;">
-                    <thead>
+                    <thead class="bg-surface sticky top-0 shadow-sm" style="z-index: 10;">
                         <tr class="border-b border-color text-secondary text-sm">
-                            <th class="py-2 px-3">Date</th>
-                            <th class="py-2 px-3">Category</th>
-                            <th class="py-2 px-3">Narration</th>
-                            <th class="py-2 px-3 text-right" id="stat-breakdown-total-expense-header" style="display:none;">Total Bill</th>
-                            <th class="py-2 px-3 text-right" id="stat-breakdown-amount-header">Amount</th>
+                            <th class="py-3 px-4 border-r border-color text-left font-semibold">Date</th>
+                            <th class="py-3 px-4 border-r border-color text-left font-semibold">Category</th>
+                            <th class="py-3 px-4 border-r border-color text-left font-semibold">Narration</th>
+                            <th class="py-3 px-4 border-r border-color text-right font-semibold" id="stat-breakdown-total-expense-header" style="display:none;">Total Bill</th>
+                            <th class="py-3 px-4 text-right font-semibold" id="stat-breakdown-amount-header">Amount</th>
                         </tr>
                     </thead>
                     <tbody id="stat-breakdown-tbody" class="text-sm">
@@ -1830,7 +1830,7 @@
                     });
                 } else if (type === 'share') {
                     title = "Your Share 🍔";
-                    amountKey = 'Consumed';
+                    amountKey = 'Your Share';
                     sorted.forEach(t => {
                         const mySplit = t.splitData[state.user.uid] || 0;
                         if (mySplit > 0) {
@@ -1862,11 +1862,11 @@
                     
                     tbodyHtml += `
                         <tr class="border-b border-color hover:bg-surface-hover transition-colors">
-                            <td class="py-3 px-3 text-secondary" style="white-space:nowrap;">${ui.formatDate(t.date)}</td>
-                            <td class="py-3 px-3"><i class="fa-solid ${icon} mr-2"></i>${t.category || 'Expense'}</td>
-                            <td class="py-3 px-3">${t.description}</td>
-                            ${isShare ? `<td class="py-3 px-3 text-right">${ui.formatCurrency(t.amount)}</td>` : ''}
-                            <td class="py-3 px-3 text-right font-medium">${ui.formatCurrency(t.displayAmount)}</td>
+                            <td class="py-3 px-4 border-r border-color text-secondary" style="white-space:nowrap;">${ui.formatDate(t.date)}</td>
+                            <td class="py-3 px-4 border-r border-color"><i class="fa-solid ${icon} mr-2"></i>${t.category || 'Expense'}</td>
+                            <td class="py-3 px-4 border-r border-color">${t.description}</td>
+                            ${isShare ? `<td class="py-3 px-4 border-r border-color text-right">${ui.formatCurrency(t.amount)}</td>` : ''}
+                            <td class="py-3 px-4 text-right font-medium">${ui.formatCurrency(t.displayAmount)}</td>
                         </tr>
                     `;
                 });
@@ -1876,8 +1876,8 @@
                 } else {
                     tbodyHtml += `
                         <tr class="bg-surface-hover font-bold">
-                            <td colspan="${isShare ? 4 : 3}" class="py-3 px-3 text-right">Total</td>
-                            <td class="py-3 px-3 text-right">${ui.formatCurrency(grandTotal)}</td>
+                            <td colspan="${isShare ? 4 : 3}" class="py-3 px-4 text-right border-r border-color">Total</td>
+                            <td class="py-3 px-4 text-right text-lg text-primary">${ui.formatCurrency(grandTotal)}</td>
                         </tr>
                     `;
                 }
@@ -2609,7 +2609,7 @@
                                             <div class="font-bold">${ui.formatCurrency(totalPaid)}</div>
                                         </div>
                                         <div class="bg-surface-hover p-2 rounded">
-                                            <div class="text-secondary mb-1">Consumed</div>
+                                            <div class="text-secondary mb-1">Your Share</div>
                                             <div class="font-bold">${ui.formatCurrency(totalConsumed)}</div>
                                         </div>
                                         <div class="bg-surface-hover p-2 rounded">
@@ -2723,13 +2723,13 @@
                     
                     tbodyHtml += `
                         <tr class="border-b border-color hover:bg-surface-hover transition-colors">
-                            <td class="py-3 px-3 text-secondary" style="white-space:nowrap;">${ui.formatDate(t.date)}</td>
-                            <td class="py-3 px-3"><i class="fa-solid ${icon} mr-2"></i>${t.category || 'Expense'}</td>
-                            <td class="py-3 px-3">${t.description}</td>
-                            <td class="py-3 px-3 text-right font-medium">${ui.formatCurrency(t.amount)}</td>
-                            <td class="py-3 px-3 text-right text-danger">${debit > 0 ? ui.formatCurrency(debit) : '-'}</td>
-                            <td class="py-3 px-3 text-right text-success">${credit > 0 ? ui.formatCurrency(credit) : '-'}</td>
-                            <td class="py-3 px-3 text-right font-bold" style="color: ${balance > 0 ? 'var(--success-color)' : (balance < 0 ? 'var(--danger-color)' : 'var(--text-primary)')}">${ui.formatCurrency(Math.abs(balance))} ${balance > 0 ? 'Dr' : (balance < 0 ? 'Cr' : '')}</td>
+                            <td class="py-3 px-4 border-r border-color text-secondary" style="white-space:nowrap;">${ui.formatDate(t.date)}</td>
+                            <td class="py-3 px-4 border-r border-color"><i class="fa-solid ${icon} mr-2"></i>${t.category || 'Expense'}</td>
+                            <td class="py-3 px-4 border-r border-color">${t.description}</td>
+                            <td class="py-3 px-4 border-r border-color text-right font-medium">${ui.formatCurrency(t.amount)}</td>
+                            <td class="py-3 px-4 border-r border-color text-right text-danger">${debit > 0 ? ui.formatCurrency(debit) : '-'}</td>
+                            <td class="py-3 px-4 border-r border-color text-right text-success">${credit > 0 ? ui.formatCurrency(credit) : '-'}</td>
+                            <td class="py-3 px-4 text-right font-bold" style="color: ${balance > 0 ? 'var(--success-color)' : (balance < 0 ? 'var(--danger-color)' : 'var(--text-primary)')}">${ui.formatCurrency(Math.abs(balance))} ${balance > 0 ? 'Dr' : (balance < 0 ? 'Cr' : '')}</td>
                         </tr>
                     `;
                 });
