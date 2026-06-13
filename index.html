@@ -619,8 +619,8 @@
                         <img id="nav-user-img" src="https://ui-avatars.com/api/?name=User" class="rounded-full" style="width:32px;height:32px;border-radius:50%;">
                         <span id="nav-user-name" class="font-medium text-sm hidden md:block">User Name</span>
                     </div>
-                    <button id="btn-logout" class="btn btn-secondary text-sm hidden md:flex">
-                        <i class="fa-solid fa-sign-out-alt"></i> Logout
+                    <button id="btn-logout" class="btn btn-secondary text-sm flex">
+                        <i class="fa-solid fa-sign-out-alt"></i> <span class="hidden md:inline">Logout</span>
                     </button>
                 </div>
             </div>
@@ -989,6 +989,10 @@
             <div class="modal-footer hidden" id="prof-footer-admin">
                 <button class="btn btn-danger" onclick="app.removeMember()">Remove Member</button>
                 <button class="btn btn-primary" onclick="app.updateMemberRole()">Save Role</button>
+            </div>
+            <div class="modal-footer hidden" id="prof-footer-self">
+                <button class="btn btn-secondary" onclick="ui.hideModal('modal-profile')">Cancel</button>
+                <button class="btn btn-primary" onclick="app.updateSelf()">Save Profile</button>
             </div>
         </div>
     </div>
@@ -1998,7 +2002,9 @@
 
                 document.getElementById('prof-name').innerText = m.name;
                 document.getElementById('prof-email').innerText = m.email;
-                document.getElementById('prof-upi').value = m.upiId || 'Not provided';
+                
+                const upiInput = document.getElementById('prof-upi');
+                upiInput.value = m.upiId || '';
                 document.getElementById('prof-role').value = m.role;
 
                 // Admin controls
@@ -2006,18 +2012,45 @@
                 const isSelf = m.id === state.user.uid;
                 const isTargetSuperAdmin = m.role === 'SUPER_ADMIN';
                 
-                const footer = document.getElementById('prof-footer-admin');
+                const footerAdmin = document.getElementById('prof-footer-admin');
+                const footerSelf = document.getElementById('prof-footer-self');
                 const roleSelect = document.getElementById('prof-role');
 
                 if (isAdmin && !isSelf && !isTargetSuperAdmin) {
-                    footer.classList.remove('hidden');
+                    footerAdmin.classList.remove('hidden');
                     roleSelect.disabled = false;
                 } else {
-                    footer.classList.add('hidden');
+                    footerAdmin.classList.add('hidden');
                     roleSelect.disabled = true;
                 }
 
+                if (isSelf) {
+                    upiInput.readOnly = false;
+                    upiInput.placeholder = 'e.g. name@okaxis';
+                    footerSelf.classList.remove('hidden');
+                } else {
+                    upiInput.readOnly = true;
+                    upiInput.placeholder = 'Not provided';
+                    footerSelf.classList.add('hidden');
+                }
+
                 ui.showModal('modal-profile');
+            },
+
+            updateSelf: async () => {
+                const upi = document.getElementById('prof-upi').value.trim();
+                const docId = app._tempProfileEditId;
+                if(!docId) return;
+
+                ui.setLoading(true);
+                try {
+                    await updateDoc(doc(db, 'tripMembers', docId), { upiId: upi });
+                    ui.toast('Profile updated successfully');
+                    ui.hideModal('modal-profile');
+                } catch(e) {
+                    ui.toast(e.message, 'error');
+                }
+                ui.setLoading(false);
             },
 
             updateMemberRole: async () => {
