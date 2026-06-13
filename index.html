@@ -1,0 +1,1947 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Travel Ledger - Smart Expense Management</title>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- 
+    ==================================================
+    NETLIFY DEPLOYMENT INSTRUCTIONS
+    ==================================================
+    1. Push this complete index.html to a GitHub repository.
+    2. Log in to Netlify (netlify.com).
+    3. Click "Add new site" -> "Import an existing project".
+    4. Connect to your GitHub and select the repository.
+    5. Leave Build Command empty. Set Publish directory to the root (or folder containing index.html).
+    6. Click "Deploy site".
+    7. (Optional) Setup Custom Domain in Netlify settings.
+
+    ==================================================
+    FIREBASE SETUP INSTRUCTIONS
+    ==================================================
+    1. Go to Firebase Console (console.firebase.google.com).
+    2. Create a new project.
+    3. Enable Authentication -> Sign-in method -> Google (Enable it).
+    4. Enable Firestore Database -> Create database (Start in production mode).
+    5. Go to Project Settings -> General -> Your apps -> Add Web App.
+    6. Copy the configuration object and replace the placeholder in the <script type="module"> below.
+    7. Go to Firestore Database -> Rules, and paste the Security Rules below.
+
+    ==================================================
+    FIRESTORE SECURITY RULES
+    ==================================================
+    rules_version = '2';
+    service cloud.firestore {
+      match /databases/{database}/documents {
+        
+        function isSignedIn() {
+          return request.auth != null;
+        }
+
+        // Check if user is a member of the trip
+        function isTripMember(tripId) {
+          return exists(/databases/$(database)/documents/tripMembers/$(tripId + "_" + request.auth.uid));
+        }
+
+        // Check user role
+        function getRole(tripId) {
+          return get(/databases/$(database)/documents/tripMembers/$(tripId + "_" + request.auth.uid)).data.role;
+        }
+        
+        function isAdmin(tripId) {
+          let role = getRole(tripId);
+          return role == 'SUPER_ADMIN' || role == 'ADMIN';
+        }
+
+        match /users/{userId} {
+          allow read, write: if isSignedIn() && request.auth.uid == userId;
+        }
+
+        match /trips/{tripId} {
+          allow create: if isSignedIn();
+          allow read: if isSignedIn() && isTripMember(tripId);
+          allow update: if isSignedIn() && isTripMember(tripId) && isAdmin(tripId);
+          allow delete: if isSignedIn() && getRole(tripId) == 'SUPER_ADMIN';
+        }
+
+        match /tripMembers/{memberId} {
+          allow read: if isSignedIn() && isTripMember(resource.data.tripId);
+          allow create: if isSignedIn();
+          allow update, delete: if isSignedIn() && isAdmin(resource.data.tripId);
+        }
+
+        match /expenses/{expenseId} {
+          allow read: if isSignedIn() && isTripMember(resource.data.tripId);
+          allow create: if isSignedIn() && isTripMember(resource.data.tripId) && getRole(resource.data.tripId) != 'VIEWER';
+          allow update, delete: if isSignedIn() && isTripMember(resource.data.tripId) && 
+            (isAdmin(resource.data.tripId) || resource.data.createdBy == request.auth.uid);
+        }
+
+        match /joinRequests/{requestId} {
+          allow create: if isSignedIn();
+          allow read, update, delete: if isSignedIn() && isAdmin(resource.data.tripId);
+        }
+        
+        match /settlements/{settlementId} {
+           allow read: if isSignedIn() && isTripMember(resource.data.tripId);
+           allow create, update, delete: if isSignedIn() && isAdmin(resource.data.tripId);
+        }
+      }
+    }
+    ==================================================
+    -->
+
+    <style>
+        /* CSS Variables & Theme Definitions */
+        :root {
+            /* Light Theme (Default) */
+            --bg-base: #f8fafc;
+            --bg-surface: #ffffff;
+            --bg-surface-hover: #f1f5f9;
+            --text-primary: #0f172a;
+            --text-secondary: #475569;
+            --text-muted: #94a3b8;
+            --border-color: #e2e8f0;
+            --primary-color: #4f46e5;
+            --primary-hover: #4338ca;
+            --secondary-color: #0ea5e9;
+            --success-color: #10b981;
+            --danger-color: #ef4444;
+            --warning-color: #f59e0b;
+            --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+            --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+            --radius-md: 0.5rem;
+            --radius-lg: 0.75rem;
+            --radius-xl: 1rem;
+            --font-family: 'Inter', sans-serif;
+            --glass-bg: rgba(255, 255, 255, 0.7);
+            --glass-border: rgba(255, 255, 255, 0.5);
+        }
+
+        [data-theme="dark"] {
+            --bg-base: #0f172a;
+            --bg-surface: #1e293b;
+            --bg-surface-hover: #334155;
+            --text-primary: #f8fafc;
+            --text-secondary: #cbd5e1;
+            --text-muted: #64748b;
+            --border-color: #334155;
+            --primary-color: #6366f1;
+            --primary-hover: #818cf8;
+            --glass-bg: rgba(30, 41, 59, 0.7);
+            --glass-border: rgba(255, 255, 255, 0.1);
+        }
+
+        /* Reset & Base Styles */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: var(--font-family);
+            background-color: var(--bg-base);
+            color: var(--text-primary);
+            line-height: 1.5;
+            transition: background-color 0.3s ease, color 0.3s ease;
+            -webkit-font-smoothing: antialiased;
+        }
+        h1, h2, h3, h4, h5, h6 { font-weight: 600; line-height: 1.2; }
+        a { text-decoration: none; color: var(--primary-color); }
+        button { cursor: pointer; font-family: inherit; border: none; outline: none; background: none; }
+        input, select, textarea { font-family: inherit; }
+        ul { list-style: none; }
+        
+        /* Typography Utilities */
+        .text-primary { color: var(--text-primary); }
+        .text-secondary { color: var(--text-secondary); }
+        .text-muted { color: var(--text-muted); }
+        .text-brand { color: var(--primary-color); }
+        .text-success { color: var(--success-color); }
+        .text-danger { color: var(--danger-color); }
+        .font-bold { font-weight: 700; }
+        .font-semibold { font-weight: 600; }
+        .font-medium { font-weight: 500; }
+        .text-sm { font-size: 0.875rem; }
+        .text-xs { font-size: 0.75rem; }
+        .text-lg { font-size: 1.125rem; }
+        .text-xl { font-size: 1.25rem; }
+        .text-2xl { font-size: 1.5rem; }
+        .text-3xl { font-size: 1.875rem; }
+
+        /* Layout Utilities */
+        .flex { display: flex; }
+        .flex-col { flex-direction: column; }
+        .items-center { align-items: center; }
+        .justify-center { justify-content: center; }
+        .justify-between { justify-content: space-between; }
+        .justify-end { justify-content: flex-end; }
+        .gap-1 { gap: 0.25rem; }
+        .gap-2 { gap: 0.5rem; }
+        .gap-3 { gap: 0.75rem; }
+        .gap-4 { gap: 1rem; }
+        .gap-6 { gap: 1.5rem; }
+        .w-full { width: 100%; }
+        .h-full { height: 100%; }
+        .grid { display: grid; }
+        .grid-cols-1 { grid-template-columns: repeat(1, minmax(0, 1fr)); }
+        .grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        
+        @media (min-width: 768px) {
+            .md\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .md\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+            .md\:grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+            .md\:flex-row { flex-direction: row; }
+        }
+
+        /* Spacing Utilities */
+        .p-2 { padding: 0.5rem; }
+        .p-4 { padding: 1rem; }
+        .p-6 { padding: 1.5rem; }
+        .py-2 { padding-top: 0.5rem; padding-bottom: 0.5rem; }
+        .px-4 { padding-left: 1rem; padding-right: 1rem; }
+        .px-6 { padding-left: 1.5rem; padding-right: 1.5rem; }
+        .mt-2 { margin-top: 0.5rem; }
+        .mt-4 { margin-top: 1rem; }
+        .mt-6 { margin-top: 1.5rem; }
+        .mb-2 { margin-bottom: 0.5rem; }
+        .mb-4 { margin-bottom: 1rem; }
+        .ml-auto { margin-left: auto; }
+
+        /* Components */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 1rem;
+        }
+
+        /* Buttons */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.5rem 1rem;
+            border-radius: var(--radius-md);
+            font-weight: 500;
+            transition: all 0.2s ease;
+            gap: 0.5rem;
+            font-size: 0.875rem;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            color: #ffffff;
+            box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.3);
+        }
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 8px -1px rgba(79, 70, 229, 0.4);
+        }
+        .btn-secondary {
+            background-color: var(--bg-surface-hover);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+        }
+        .btn-secondary:hover {
+            background-color: var(--border-color);
+        }
+        .btn-danger {
+            background-color: var(--danger-color);
+            color: white;
+        }
+        .btn-danger:hover { background-color: #dc2626; }
+        .btn-success { background-color: var(--success-color); color: white; }
+        .btn-icon {
+            padding: 0.5rem;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-secondary);
+            background: transparent;
+            transition: background 0.2s;
+        }
+        .btn-icon:hover {
+            background: var(--bg-surface-hover);
+            color: var(--primary-color);
+        }
+
+        /* Cards */
+        .card {
+            background-color: var(--bg-surface);
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--border-color);
+            box-shadow: var(--shadow-sm);
+            padding: 1.5rem;
+            transition: transform 0.2s, box-shadow 0.2s;
+            position: relative;
+            overflow: hidden;
+        }
+        .card-interactive:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+            border-color: var(--primary-color);
+        }
+
+        /* Forms */
+        .form-group { margin-bottom: 1rem; }
+        .form-label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+        .form-control {
+            width: 100%;
+            padding: 0.625rem 0.875rem;
+            background-color: var(--bg-base);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            color: var(--text-primary);
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .form-control:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+        }
+        select.form-control { appearance: none; background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e"); background-position: right 0.5rem center; background-repeat: no-repeat; background-size: 1.5em 1.5em; padding-right: 2.5rem; }
+
+        /* App Layout */
+        #app {
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+        
+        /* Navbar */
+        .navbar {
+            background: var(--glass-bg);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--glass-border);
+            position: sticky;
+            top: 0;
+            z-index: 40;
+            padding: 1rem 0;
+        }
+        .nav-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .logo {
+            font-size: 1.25rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .nav-actions { display: flex; align-items: center; gap: 1rem; }
+
+        /* Main Content Area */
+        main {
+            flex: 1;
+            padding: 2rem 0;
+        }
+
+        /* Views */
+        .view-section { display: none; animation: fadeIn 0.3s ease-in-out; }
+        .view-section.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Trip Details Navigation */
+        .trip-nav {
+            display: flex;
+            gap: 1rem;
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 1.5rem;
+            overflow-x: auto;
+            padding-bottom: 2px;
+            scrollbar-width: none;
+        }
+        .trip-nav::-webkit-scrollbar { display: none; }
+        .trip-nav-item {
+            padding: 0.75rem 1rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            border-bottom: 2px solid transparent;
+            white-space: nowrap;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .trip-nav-item:hover { color: var(--text-primary); }
+        .trip-nav-item.active {
+            color: var(--primary-color);
+            border-bottom-color: var(--primary-color);
+        }
+
+        /* Modals */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(4px);
+            z-index: 50;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+        .modal-overlay.active {
+            display: flex;
+            opacity: 1;
+        }
+        .modal-content {
+            background: var(--bg-surface);
+            border-radius: var(--radius-lg);
+            width: 100%;
+            max-width: 500px;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: var(--shadow-lg);
+            transform: scale(0.95);
+            transition: transform 0.2s ease;
+            border: 1px solid var(--border-color);
+        }
+        .modal-overlay.active .modal-content { transform: scale(1); }
+        .modal-header {
+            padding: 1.25rem 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            background: var(--bg-surface);
+            z-index: 10;
+        }
+        .modal-body { padding: 1.5rem; }
+        .modal-footer {
+            padding: 1.25rem 1.5rem;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            justify-content: flex-end;
+            gap: 1rem;
+            position: sticky;
+            bottom: 0;
+            background: var(--bg-surface);
+            z-index: 10;
+        }
+
+        /* Tables & Lists */
+        .data-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+        .data-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+            background: var(--bg-base);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border-color);
+            transition: all 0.2s;
+        }
+        .data-item:hover { border-color: var(--text-muted); }
+        .data-item-left { display: flex; align-items: center; gap: 1rem; }
+        .data-icon {
+            width: 40px; height: 40px;
+            border-radius: 50%;
+            background: var(--bg-surface-hover);
+            display: flex; align-items: center; justify-content: center;
+            color: var(--primary-color);
+            font-size: 1.25rem;
+        }
+        
+        /* Badges */
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.125rem 0.625rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+        .badge-active { background: rgba(16, 185, 129, 0.1); color: var(--success-color); border: 1px solid rgba(16, 185, 129, 0.2); }
+        .badge-archived { background: rgba(148, 163, 184, 0.1); color: var(--text-muted); border: 1px solid rgba(148, 163, 184, 0.2); }
+        .badge-role { background: rgba(79, 70, 229, 0.1); color: var(--primary-color); border: 1px solid rgba(79, 70, 229, 0.2); }
+
+        /* Login Screen Special */
+        .login-wrapper {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, var(--bg-base) 0%, var(--bg-surface) 100%);
+            padding: 1rem;
+        }
+        .login-card {
+            max-width: 400px;
+            width: 100%;
+            text-align: center;
+            padding: 3rem 2rem;
+        }
+        .login-logo i { font-size: 3rem; color: var(--primary-color); margin-bottom: 1rem; }
+        
+        /* Toast Notifications */
+        #toast-container {
+            position: fixed;
+            bottom: 1.5rem;
+            right: 1.5rem;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        .toast {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-color);
+            box-shadow: var(--shadow-lg);
+            padding: 1rem 1.5rem;
+            border-radius: var(--radius-md);
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            transform: translateX(120%);
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .toast.show { transform: translateX(0); }
+        .toast-success i { color: var(--success-color); }
+        .toast-error i { color: var(--danger-color); }
+
+        /* Utility specific classes */
+        .hidden { display: none !important; }
+        .stat-card {
+            text-align: center;
+            padding: 1.5rem;
+        }
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--primary-color);
+            margin: 0.5rem 0;
+        }
+
+        /* Loading Spinner */
+        .spinner {
+            border: 3px solid rgba(0,0,0,0.1);
+            border-left-color: var(--primary-color);
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        [data-theme="dark"] .spinner { border: 3px solid rgba(255,255,255,0.1); border-left-color: var(--primary-color); }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        #global-loader {
+            position: fixed; top:0; left:0; width:100%; height:100%;
+            background: var(--bg-base); z-index: 9999;
+            display: flex; align-items: center; justify-content: center;
+            flex-direction: column; gap: 1rem;
+        }
+
+        /* Split logic dynamic inputs container */
+        .split-inputs-container {
+            max-height: 200px;
+            overflow-y: auto;
+            padding-right: 0.5rem;
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 3rem 1rem;
+            color: var(--text-muted);
+        }
+        .empty-state i {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- Global Loader -->
+    <div id="global-loader">
+        <div class="spinner" style="width: 48px; height: 48px; border-width: 4px;"></div>
+        <p class="text-secondary font-medium">Loading Travel Ledger...</p>
+    </div>
+
+    <!-- Login View -->
+    <div id="view-login" class="view-section login-wrapper">
+        <div class="card login-card shadow-lg">
+            <div class="login-logo">
+                <i class="fa-solid fa-wallet"></i>
+                <h1 class="text-2xl mt-2 text-primary">Travel Ledger</h1>
+                <p class="text-secondary mt-2 mb-6">Smart expense management for your trips</p>
+            </div>
+            <button id="btn-google-login" class="btn btn-secondary w-full" style="padding: 0.75rem; font-size: 1rem;">
+                <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" style="width: 20px; height: 20px;">
+                Continue with Google
+            </button>
+            <div class="mt-6 text-sm text-muted">
+                Offline support enabled. Changes sync automatically.
+            </div>
+        </div>
+    </div>
+
+    <!-- Main App Shell (Hidden until login) -->
+    <div id="app-shell" class="hidden">
+        
+        <!-- Navbar -->
+        <nav class="navbar shadow-sm">
+            <div class="container nav-content">
+                <div class="logo cursor-pointer" onclick="app.navigate('home')">
+                    <i class="fa-solid fa-wallet"></i> Travel Ledger
+                </div>
+                <div class="nav-actions">
+                    <div id="offline-indicator" class="hidden text-warning text-sm font-medium flex items-center gap-1" title="Offline Mode - Changes will sync when online">
+                        <i class="fa-solid fa-wifi-slash"></i> <span class="hidden md:inline">Offline</span>
+                    </div>
+                    <button id="btn-theme-toggle" class="btn-icon" title="Toggle Dark Mode">
+                        <i class="fa-solid fa-moon"></i>
+                    </button>
+                    <div class="relative flex items-center gap-2 group cursor-pointer" id="user-menu-btn">
+                        <img id="nav-user-img" src="https://ui-avatars.com/api/?name=User" class="rounded-full" style="width:32px;height:32px;border-radius:50%;">
+                        <span id="nav-user-name" class="font-medium text-sm hidden md:block">User Name</span>
+                    </div>
+                    <button id="btn-logout" class="btn btn-secondary text-sm hidden md:flex">
+                        <i class="fa-solid fa-sign-out-alt"></i> Logout
+                    </button>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="container">
+            
+            <!-- Home Dashboard (My Trips) -->
+            <div id="view-home" class="view-section">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-2xl">My Trips</h2>
+                    <div class="flex gap-2">
+                        <button class="btn btn-secondary" onclick="ui.showModal('modal-join-trip')">
+                            <i class="fa-solid fa-right-to-bracket"></i> <span class="hidden md:inline">Join</span>
+                        </button>
+                        <button class="btn btn-primary" onclick="ui.showModal('modal-create-trip')">
+                            <i class="fa-solid fa-plus"></i> <span class="hidden md:inline">Create</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Tabs -->
+                <div class="trip-nav mb-4" id="home-tabs">
+                    <div class="trip-nav-item active" data-target="trips-active">Active Trips</div>
+                    <div class="trip-nav-item" data-target="trips-archived">Archived</div>
+                </div>
+
+                <!-- Active Trips -->
+                <div id="trips-active" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <!-- Rendered via JS -->
+                </div>
+
+                <!-- Archived Trips -->
+                <div id="trips-archived" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 hidden">
+                    <!-- Rendered via JS -->
+                </div>
+            </div>
+
+            <!-- Trip Detail View -->
+            <div id="view-trip-detail" class="view-section hidden">
+                <!-- Trip Header -->
+                <div class="card mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                    <div>
+                        <div class="flex items-center gap-3 mb-1">
+                            <h2 id="td-name" class="text-2xl font-bold">Trip Name</h2>
+                            <span id="td-status-badge" class="badge badge-active">Active</span>
+                            <span id="td-role-badge" class="badge badge-role">Admin</span>
+                        </div>
+                        <p class="text-secondary"><i class="fa-solid fa-location-dot"></i> <span id="td-dest">Destination</span> &nbsp;&bull;&nbsp; <i class="fa-solid fa-calendar"></i> <span id="td-dates">Dates</span></p>
+                        <p class="text-sm text-muted mt-2">Join Code: <strong id="td-join-code" class="text-primary cursor-pointer" onclick="app.copyJoinCode()" title="Click to copy">XYZ123 <i class="fa-regular fa-copy"></i></strong></p>
+                    </div>
+                    <div class="flex gap-2 flex-wrap">
+                        <button class="btn btn-secondary text-sm" onclick="app.shareWhatsApp()">
+                            <i class="fa-brands fa-whatsapp text-success"></i> Share
+                        </button>
+                        <button class="btn btn-secondary text-sm" id="btn-export-csv" onclick="app.exportCSV()">
+                            <i class="fa-solid fa-file-csv"></i> Export
+                        </button>
+                        <button class="btn btn-secondary text-sm" id="btn-trip-settings" onclick="app.openTripSettings()">
+                            <i class="fa-solid fa-gear"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Trip Navigation -->
+                <div class="trip-nav" id="trip-detail-tabs">
+                    <div class="trip-nav-item active" data-target="trip-tab-dashboard"><i class="fa-solid fa-chart-pie"></i> Dashboard</div>
+                    <div class="trip-nav-item" data-target="trip-tab-expenses"><i class="fa-solid fa-receipt"></i> Expenses</div>
+                    <div class="trip-nav-item" data-target="trip-tab-settlements"><i class="fa-solid fa-handshake"></i> Settlements</div>
+                    <div class="trip-nav-item" data-target="trip-tab-members"><i class="fa-solid fa-users"></i> Members</div>
+                </div>
+
+                <!-- Dashboard Tab -->
+                <div id="trip-tab-dashboard" class="trip-tab-content">
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                        <div class="card stat-card">
+                            <div class="text-sm text-secondary">Total Expense</div>
+                            <div class="stat-value" id="stat-total-expense">₹0</div>
+                        </div>
+                        <div class="card stat-card">
+                            <div class="text-sm text-secondary">Your Share</div>
+                            <div class="stat-value text-warning" id="stat-your-share">₹0</div>
+                        </div>
+                        <div class="card stat-card">
+                            <div class="text-sm text-secondary">You Paid</div>
+                            <div class="stat-value text-success" id="stat-you-paid">₹0</div>
+                        </div>
+                        <div class="card stat-card">
+                            <div class="text-sm text-secondary" id="stat-balance-label">Net Balance</div>
+                            <div class="stat-value" id="stat-balance">₹0</div>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="card">
+                            <h3 class="font-semibold mb-4 border-b pb-2 border-color">Recent Expenses</h3>
+                            <div id="list-recent-expenses" class="data-list"></div>
+                        </div>
+                        <div class="card">
+                            <h3 class="font-semibold mb-4 border-b pb-2 border-color">Your Settlements (Pending)</h3>
+                            <div id="list-my-settlements" class="data-list"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Expenses Tab -->
+                <div id="trip-tab-expenses" class="trip-tab-content hidden">
+                    <div class="flex justify-between items-center mb-4">
+                        <div class="flex gap-2">
+                            <input type="text" id="search-expenses" class="form-control" placeholder="Search..." style="max-width:200px;">
+                        </div>
+                        <button class="btn btn-primary btn-add-expense-req" onclick="app.openAddExpenseModal()">
+                            <i class="fa-solid fa-plus"></i> Add Expense
+                        </button>
+                    </div>
+                    <div class="card p-0">
+                        <div id="list-all-expenses" class="data-list" style="gap:0;">
+                            <!-- Rendered via JS -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Settlements Tab -->
+                <div id="trip-tab-settlements" class="trip-tab-content hidden">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="font-medium">Optimized Settlements</h3>
+                        <button class="btn btn-secondary btn-admin-req" onclick="app.calculateSmartSettlements()" title="Recalculate balances">
+                            <i class="fa-solid fa-rotate"></i> Refresh
+                        </button>
+                    </div>
+                    <div class="card bg-surface-hover mb-6">
+                        <p class="text-sm text-secondary"><i class="fa-solid fa-lightbulb text-warning"></i> Our smart engine calculates the minimum number of transactions required to settle all balances among members.</p>
+                    </div>
+                    <div id="list-all-settlements" class="data-list">
+                        <!-- Rendered via JS -->
+                    </div>
+                </div>
+
+                <!-- Members Tab -->
+                <div id="trip-tab-members" class="trip-tab-content hidden">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="font-medium">Trip Members</h3>
+                        <div class="flex gap-2">
+                             <button class="btn btn-secondary btn-admin-req" onclick="app.viewJoinRequests()">
+                                <i class="fa-solid fa-bell"></i> Requests <span id="req-count-badge" class="badge badge-role hidden">0</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card p-0">
+                        <div id="list-all-members" class="data-list" style="gap:0;">
+                            <!-- Rendered via JS -->
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+        </main>
+    </div>
+
+    <!-- Modals -->
+
+    <!-- Create Trip Modal -->
+    <div id="modal-create-trip" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Create New Trip</h3>
+                <button class="btn-icon" onclick="ui.hideModal('modal-create-trip')"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <form id="form-create-trip">
+                    <div class="form-group">
+                        <label class="form-label">Trip Name *</label>
+                        <input type="text" id="ct-name" class="form-control" required placeholder="e.g. Goa Boys Trip">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Destination</label>
+                        <input type="text" id="ct-dest" class="form-control" placeholder="e.g. Goa, India">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Description</label>
+                        <textarea id="ct-desc" class="form-control" rows="2"></textarea>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="form-group">
+                            <label class="form-label">Start Date</label>
+                            <input type="date" id="ct-start" class="form-control">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">End Date</label>
+                            <input type="date" id="ct-end" class="form-control">
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="ui.hideModal('modal-create-trip')">Cancel</button>
+                <button class="btn btn-primary" onclick="app.submitCreateTrip()">Create Trip</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Join Trip Modal -->
+    <div id="modal-join-trip" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Join Trip</h3>
+                <button class="btn-icon" onclick="ui.hideModal('modal-join-trip')"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">Enter 6-Character Join Code</label>
+                    <input type="text" id="jt-code" class="form-control" style="text-transform: uppercase; letter-spacing: 2px; font-size:1.25rem; text-align:center;" maxlength="6" placeholder="XXXXXX">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="ui.hideModal('modal-join-trip')">Cancel</button>
+                <button class="btn btn-primary" onclick="app.submitJoinTrip()">Request to Join</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add/Edit Expense Modal -->
+    <div id="modal-expense" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modal-expense-title">Add Expense</h3>
+                <button class="btn-icon" onclick="ui.hideModal('modal-expense')"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <form id="form-expense">
+                    <input type="hidden" id="ex-id">
+                    <div class="form-group">
+                        <label class="form-label">Description *</label>
+                        <input type="text" id="ex-desc" class="form-control" required placeholder="What was this for?">
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="form-group">
+                            <label class="form-label">Amount (₹) *</label>
+                            <input type="number" id="ex-amount" class="form-control" required min="0.01" step="0.01">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Date *</label>
+                            <input type="date" id="ex-date" class="form-control" required>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="form-group">
+                            <label class="form-label">Category</label>
+                            <select id="ex-category" class="form-control">
+                                <option value="Hotel">Hotel</option>
+                                <option value="Flight">Flight</option>
+                                <option value="Train">Train</option>
+                                <option value="Taxi">Taxi/Transport</option>
+                                <option value="Food" selected>Food & Dining</option>
+                                <option value="Entertainment">Entertainment</option>
+                                <option value="Shopping">Shopping</option>
+                                <option value="Miscellaneous">Miscellaneous</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Paid By *</label>
+                            <select id="ex-paidby" class="form-control" required></select>
+                        </div>
+                    </div>
+                    
+                    <hr class="my-4 border-color">
+                    
+                    <div class="form-group">
+                        <label class="form-label">Split Method</label>
+                        <select id="ex-split-type" class="form-control" onchange="app.renderSplitInputs()">
+                            <option value="EQUAL">Equally amongst all</option>
+                            <option value="CUSTOM">Custom Amounts</option>
+                            <option value="PERCENTAGE">By Percentage</option>
+                        </select>
+                    </div>
+                    
+                    <div id="ex-split-container" class="split-inputs-container mt-2">
+                        <!-- Dynamic split inputs go here -->
+                    </div>
+                    <div id="ex-split-validation" class="text-sm text-danger mt-2 hidden"></div>
+
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="ui.hideModal('modal-expense')">Cancel</button>
+                <button class="btn btn-primary" onclick="app.submitExpense()">Save Expense</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- User Profile / UPI Modal -->
+    <div id="modal-profile" class="modal-overlay">
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-header">
+                <h3>Member Details</h3>
+                <button class="btn-icon" onclick="ui.hideModal('modal-profile')"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="text-center mb-4">
+                    <div class="data-icon mx-auto mb-2" style="width:64px;height:64px;font-size:2rem;"><i class="fa-solid fa-user"></i></div>
+                    <h4 id="prof-name" class="text-lg">Name</h4>
+                    <p id="prof-email" class="text-sm text-secondary">email</p>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">UPI ID</label>
+                    <div class="flex gap-2">
+                        <input type="text" id="prof-upi" class="form-control" readonly>
+                        <button class="btn btn-secondary" onclick="app.copyText(document.getElementById('prof-upi').value)"><i class="fa-regular fa-copy"></i></button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Role</label>
+                    <select id="prof-role" class="form-control" disabled>
+                        <option value="SUPER_ADMIN">Super Admin</option>
+                        <option value="ADMIN">Admin</option>
+                        <option value="EDITOR">Editor</option>
+                        <option value="VIEWER">Viewer</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer hidden" id="prof-footer-admin">
+                <button class="btn btn-danger" onclick="app.removeMember()">Remove Member</button>
+                <button class="btn btn-primary" onclick="app.updateMemberRole()">Save Role</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container"></div>
+
+    <!-- Scripts -->
+    <!-- SweetAlert2 for nice confirmation prompts (Optional, using native confirm for zero dependencies if strict, but adding lightweight cdn is fine) -->
+    <!-- Let's stick to vanilla confirm to adhere to single file minimum deps -->
+    
+    <script type="module">
+        /**
+         * ==========================================
+         * FIREBASE CONFIGURATION
+         * REPLACE THIS OBJECT WITH YOUR FIREBASE WEB CONFIG
+         * ==========================================
+         */
+        const firebaseConfig = {
+            apiKey: "AIzaSy_YOUR_API_KEY_HERE",
+            authDomain: "your-app.firebaseapp.com",
+            projectId: "your-app-id",
+            storageBucket: "your-app.appspot.com",
+            messagingSenderId: "1234567890",
+            appId: "1:123456789:web:abcdef123456"
+        };
+
+        // Firebase Modules
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+        import { 
+            getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut 
+        } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+        import { 
+            getFirestore, collection, doc, setDoc, getDoc, getDocs, query, where, 
+            updateDoc, onSnapshot, writeBatch, serverTimestamp, deleteDoc, orderBy
+        } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+        // Initialize Firebase
+        const fbApp = initializeApp(firebaseConfig);
+        const auth = getAuth(fbApp);
+        const db = getFirestore(fbApp);
+
+        /**
+         * ==========================================
+         * STATE MANAGEMENT
+         * ==========================================
+         */
+        const state = {
+            user: null,
+            trips: [], // all trips user is part of
+            currentTripId: null,
+            currentTrip: null,
+            members: [], // members of current trip
+            expenses: [], // expenses of current trip
+            settlements: [], // calculated settlements
+            role: 'VIEWER', // role in current trip
+            isOffline: !navigator.onLine,
+            unsubscribers: []
+        };
+
+        /**
+         * ==========================================
+         * LOCAL CACHE (INDEXEDDB WRAPPER)
+         * Minimizes reads by storing fetched data
+         * ==========================================
+         */
+        const CacheDB = (() => {
+            const DB_NAME = 'TravelLedgerDB';
+            const DB_VER = 1;
+            let idb = null;
+
+            const init = () => new Promise((resolve, reject) => {
+                const req = indexedDB.open(DB_NAME, DB_VER);
+                req.onupgradeneeded = e => {
+                    const db = e.target.result;
+                    if (!db.objectStoreNames.contains('cache')) {
+                        db.createObjectStore('cache', { keyPath: 'key' });
+                    }
+                    if (!db.objectStoreNames.contains('offlineQueue')) {
+                        db.createObjectStore('offlineQueue', { keyPath: 'id', autoIncrement: true });
+                    }
+                };
+                req.onsuccess = e => { idb = e.target.result; resolve(); };
+                req.onerror = e => reject(e);
+            });
+
+            const set = (key, data) => new Promise((resolve) => {
+                if(!idb) return resolve();
+                const tx = idb.transaction('cache', 'readwrite');
+                tx.objectStore('cache').put({ key, data, ts: Date.now() });
+                tx.oncomplete = resolve;
+            });
+
+            const get = (key) => new Promise((resolve) => {
+                if(!idb) return resolve(null);
+                const tx = idb.transaction('cache', 'readonly');
+                const req = tx.objectStore('cache').get(key);
+                req.onsuccess = () => resolve(req.result ? req.result.data : null);
+                req.onerror = () => resolve(null);
+            });
+
+            return { init, set, get };
+        })();
+
+        /**
+         * ==========================================
+         * UI HELPERS
+         * ==========================================
+         */
+        const ui = {
+            showView: (viewId) => {
+                document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
+                document.getElementById(viewId).classList.add('active');
+            },
+            showModal: (modalId) => {
+                document.getElementById(modalId).classList.add('active');
+            },
+            hideModal: (modalId) => {
+                document.getElementById(modalId).classList.remove('active');
+            },
+            toast: (msg, type = 'success') => {
+                const container = document.getElementById('toast-container');
+                const t = document.createElement('div');
+                t.className = `toast toast-${type}`;
+                const icon = type === 'success' ? 'fa-check-circle' : 'fa-circle-exclamation';
+                t.innerHTML = `<i class="fa-solid ${icon}"></i> <span>${msg}</span>`;
+                container.appendChild(t);
+                setTimeout(() => t.classList.add('show'), 10);
+                setTimeout(() => {
+                    t.classList.remove('show');
+                    setTimeout(() => t.remove(), 300);
+                }, 3000);
+            },
+            setLoading: (show) => {
+                document.getElementById('global-loader').style.display = show ? 'flex' : 'none';
+            },
+            initTheme: () => {
+                const saved = localStorage.getItem('theme') || 'light';
+                document.documentElement.setAttribute('data-theme', saved);
+            },
+            toggleTheme: () => {
+                const current = document.documentElement.getAttribute('data-theme');
+                const next = current === 'dark' ? 'light' : 'dark';
+                document.documentElement.setAttribute('data-theme', next);
+                localStorage.setItem('theme', next);
+            },
+            formatCurrency: (num) => {
+                return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(num || 0);
+            },
+            formatDate: (dateStr) => {
+                if(!dateStr) return '';
+                const d = new Date(dateStr);
+                return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+            },
+            clearUnsubscribers: () => {
+                state.unsubscribers.forEach(u => u());
+                state.unsubscribers = [];
+            }
+        };
+
+        /**
+         * ==========================================
+         * APPLICATION LOGIC
+         * ==========================================
+         */
+        const app = {
+            
+            init: async () => {
+                ui.initTheme();
+                document.getElementById('btn-theme-toggle').onclick = ui.toggleTheme;
+                
+                // Offline events
+                window.addEventListener('online', () => {
+                    state.isOffline = false;
+                    document.getElementById('offline-indicator').classList.add('hidden');
+                    ui.toast('Back online. Syncing data...');
+                    // Ideally process offline queue here
+                });
+                window.addEventListener('offline', () => {
+                    state.isOffline = true;
+                    document.getElementById('offline-indicator').classList.remove('hidden');
+                    ui.toast('You are offline.', 'warning');
+                });
+
+                try {
+                    await CacheDB.init();
+                } catch(e) { console.warn("IndexedDB init failed", e); }
+
+                // Setup Auth Listener
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        state.user = user;
+                        // Save user doc
+                        try {
+                            if(!state.isOffline) {
+                                await setDoc(doc(db, 'users', user.uid), {
+                                    name: user.displayName,
+                                    email: user.email,
+                                    photo: user.photoURL,
+                                    lastLogin: serverTimestamp()
+                                }, { merge: true });
+                            }
+                        } catch(e) { console.warn("Failed to write user doc", e); }
+                        
+                        document.getElementById('nav-user-name').innerText = user.displayName.split(' ')[0];
+                        document.getElementById('nav-user-img').src = user.photoURL || `https://ui-avatars.com/api/?name=${user.displayName}`;
+                        document.getElementById('app-shell').classList.remove('hidden');
+                        ui.showView('view-home');
+                        app.loadMyTrips();
+                    } else {
+                        state.user = null;
+                        ui.clearUnsubscribers();
+                        document.getElementById('app-shell').classList.add('hidden');
+                        ui.showView('view-login');
+                        ui.setLoading(false);
+                    }
+                });
+
+                // Listeners setup
+                document.getElementById('btn-google-login').onclick = () => {
+                    const provider = new GoogleAuthProvider();
+                    signInWithPopup(auth, provider).catch(err => ui.toast(err.message, 'error'));
+                };
+                document.getElementById('btn-logout').onclick = () => signOut(auth);
+
+                // Tabs setup
+                document.querySelectorAll('.trip-nav-item').forEach(tab => {
+                    tab.addEventListener('click', (e) => {
+                        const targetId = e.currentTarget.getAttribute('data-target');
+                        if(!targetId) return;
+                        
+                        // Handle container specific tabs
+                        const parentNav = e.currentTarget.closest('.trip-nav');
+                        parentNav.querySelectorAll('.trip-nav-item').forEach(t => t.classList.remove('active'));
+                        e.currentTarget.classList.add('active');
+
+                        if(parentNav.id === 'home-tabs') {
+                            document.getElementById('trips-active').classList.add('hidden');
+                            document.getElementById('trips-archived').classList.add('hidden');
+                            document.getElementById(targetId).classList.remove('hidden');
+                        } else if (parentNav.id === 'trip-detail-tabs') {
+                            document.querySelectorAll('.trip-tab-content').forEach(c => c.classList.add('hidden'));
+                            document.getElementById(targetId).classList.remove('hidden');
+                            if(targetId === 'trip-tab-expenses') app.renderExpenses();
+                            if(targetId === 'trip-tab-settlements') app.calculateSmartSettlements();
+                            if(targetId === 'trip-tab-members') app.renderMembers();
+                        }
+                    });
+                });
+
+                // Expense Search
+                document.getElementById('search-expenses').addEventListener('input', (e) => {
+                    app.renderExpenses(e.target.value);
+                });
+            },
+
+            loadMyTrips: async () => {
+                ui.setLoading(true);
+                // Try cache first
+                const cachedTrips = await CacheDB.get(`user_trips_${state.user.uid}`);
+                if (cachedTrips) app.renderTripsList(cachedTrips);
+
+                if (state.isOffline) {
+                    ui.setLoading(false);
+                    return;
+                }
+
+                // Fetch memberships
+                const q = query(collection(db, 'tripMembers'), where('userId', '==', state.user.uid));
+                const unsub = onSnapshot(q, async (snap) => {
+                    const tripIds = snap.docs.map(d => d.data().tripId);
+                    if (tripIds.length === 0) {
+                        state.trips = [];
+                        app.renderTripsList([]);
+                        ui.setLoading(false);
+                        return;
+                    }
+
+                    // Fetch actual trip docs (In production with many trips, query in chunks of 10)
+                    const chunks = [];
+                    for(let i=0; i<tripIds.length; i+=10) {
+                        chunks.push(tripIds.slice(i, i+10));
+                    }
+                    
+                    let allTrips = [];
+                    for(let chunk of chunks) {
+                        const tripQ = query(collection(db, 'trips'), where('__name__', 'in', chunk));
+                        const tripSnap = await getDocs(tripQ);
+                        tripSnap.forEach(t => allTrips.push({ id: t.id, ...t.data() }));
+                    }
+
+                    // Merge roles into trip obj for easy access
+                    const memberships = {};
+                    snap.docs.forEach(d => memberships[d.data().tripId] = d.data().role);
+                    
+                    state.trips = allTrips.map(t => ({ ...t, userRole: memberships[t.id] }));
+                    
+                    CacheDB.set(`user_trips_${state.user.uid}`, state.trips);
+                    app.renderTripsList(state.trips);
+                    ui.setLoading(false);
+                }, (err) => {
+                    console.error(err);
+                    ui.setLoading(false);
+                });
+                
+                state.unsubscribers.push(unsub);
+            },
+
+            renderTripsList: (trips) => {
+                const activeContainer = document.getElementById('trips-active');
+                const archivedContainer = document.getElementById('trips-archived');
+                activeContainer.innerHTML = '';
+                archivedContainer.innerHTML = '';
+
+                if (trips.length === 0) {
+                    activeContainer.innerHTML = `<div class="empty-state col-span-full"><i class="fa-solid fa-plane"></i><p>You are not part of any trips yet.</p></div>`;
+                    return;
+                }
+
+                trips.forEach(trip => {
+                    const html = `
+                        <div class="card card-interactive cursor-pointer" onclick="app.openTrip('${trip.id}')">
+                            <div class="flex justify-between items-start mb-2">
+                                <h3 class="font-semibold text-lg text-primary">${trip.tripName}</h3>
+                                ${trip.status === 'Archived' ? '<span class="badge badge-archived">Archived</span>' : ''}
+                            </div>
+                            <p class="text-sm text-secondary mb-4"><i class="fa-solid fa-location-dot"></i> ${trip.destination}</p>
+                            <div class="flex justify-between text-sm text-muted mt-auto pt-4 border-t border-color">
+                                <span><i class="fa-solid fa-calendar"></i> ${ui.formatDate(trip.startDate)}</span>
+                                <span class="badge badge-role">${trip.userRole}</span>
+                            </div>
+                        </div>
+                    `;
+                    if (trip.status === 'Archived') {
+                        archivedContainer.innerHTML += html;
+                    } else {
+                        activeContainer.innerHTML += html;
+                    }
+                });
+            },
+
+            generateId: () => Math.random().toString(36).substring(2, 10).toUpperCase(),
+
+            submitCreateTrip: async () => {
+                const name = document.getElementById('ct-name').value;
+                const dest = document.getElementById('ct-dest').value;
+                const desc = document.getElementById('ct-desc').value;
+                const start = document.getElementById('ct-start').value;
+                const end = document.getElementById('ct-end').value;
+
+                if(!name) return ui.toast('Trip name is required', 'error');
+
+                const tripId = "TRIP_" + app.generateId();
+                const joinCode = app.generateId().substring(0, 6);
+
+                const batch = writeBatch(db);
+                
+                // Trip Doc
+                const tripRef = doc(db, 'trips', tripId);
+                batch.set(tripRef, {
+                    tripName: name, destination: dest, description: desc,
+                    startDate: start, endDate: end, status: 'Active',
+                    joinCode: joinCode, createdBy: state.user.uid,
+                    createdAt: serverTimestamp()
+                });
+
+                // Member Doc (Creator = SUPER_ADMIN)
+                const memberRef = doc(db, 'tripMembers', `${tripId}_${state.user.uid}`);
+                batch.set(memberRef, {
+                    tripId, userId: state.user.uid, role: 'SUPER_ADMIN',
+                    name: state.user.displayName, email: state.user.email,
+                    joinedAt: serverTimestamp()
+                });
+
+                try {
+                    ui.setLoading(true);
+                    await batch.commit();
+                    ui.hideModal('modal-create-trip');
+                    document.getElementById('form-create-trip').reset();
+                    ui.toast('Trip created successfully!');
+                    ui.setLoading(false);
+                    app.openTrip(tripId);
+                } catch(e) {
+                    ui.setLoading(false);
+                    ui.toast(e.message, 'error');
+                }
+            },
+
+            submitJoinTrip: async () => {
+                const code = document.getElementById('jt-code').value.trim().toUpperCase();
+                if(code.length !== 6) return ui.toast('Invalid code length', 'error');
+
+                ui.setLoading(true);
+                try {
+                    const q = query(collection(db, 'trips'), where('joinCode', '==', code));
+                    const snap = await getDocs(q);
+                    if(snap.empty) {
+                        ui.setLoading(false);
+                        return ui.toast('Trip not found. Check code.', 'error');
+                    }
+                    const trip = snap.docs[0];
+                    const tripId = trip.id;
+
+                    // Check if already a member
+                    const mSnap = await getDoc(doc(db, 'tripMembers', `${tripId}_${state.user.uid}`));
+                    if(mSnap.exists()) {
+                        ui.setLoading(false);
+                        ui.hideModal('modal-join-trip');
+                        return ui.toast('You are already a member of this trip.', 'warning');
+                    }
+
+                    // Create join request
+                    await setDoc(doc(db, 'joinRequests', `${tripId}_${state.user.uid}`), {
+                        tripId, userId: state.user.uid, status: 'PENDING',
+                        name: state.user.displayName, email: state.user.email,
+                        requestedAt: serverTimestamp()
+                    });
+
+                    ui.setLoading(false);
+                    ui.hideModal('modal-join-trip');
+                    ui.toast('Join request sent to Admins.');
+                } catch(e) {
+                    ui.setLoading(false);
+                    ui.toast(e.message, 'error');
+                }
+            },
+
+            copyJoinCode: () => {
+                const code = state.currentTrip.joinCode;
+                navigator.clipboard.writeText(code);
+                ui.toast('Join code copied!');
+            },
+
+            copyText: (txt) => {
+                if(!txt) return;
+                navigator.clipboard.writeText(txt);
+                ui.toast('Copied to clipboard!');
+            },
+
+            navigate: (viewId) => {
+                ui.clearUnsubscribers();
+                if(viewId === 'home') app.loadMyTrips();
+                ui.showView('view-' + viewId);
+            },
+
+            openTrip: async (tripId) => {
+                ui.setLoading(true);
+                ui.clearUnsubscribers();
+                state.currentTripId = tripId;
+                
+                const currentTripObj = state.trips.find(t => t.id === tripId);
+                state.currentTrip = currentTripObj;
+                state.role = currentTripObj.userRole;
+
+                // Setup UI based on role and status
+                const isAdmin = ['SUPER_ADMIN', 'ADMIN'].includes(state.role);
+                const isViewer = state.role === 'VIEWER';
+                const isArchived = currentTripObj.status === 'Archived';
+                const canEdit = !isViewer && !isArchived;
+
+                document.querySelectorAll('.btn-add-expense-req').forEach(el => el.style.display = canEdit ? 'inline-flex' : 'none');
+                document.querySelectorAll('.btn-admin-req').forEach(el => el.style.display = isAdmin ? 'inline-flex' : 'none');
+
+                document.getElementById('td-name').innerText = currentTripObj.tripName;
+                document.getElementById('td-dest').innerText = currentTripObj.destination || 'No destination set';
+                document.getElementById('td-dates').innerText = `${ui.formatDate(currentTripObj.startDate)} - ${ui.formatDate(currentTripObj.endDate)}`;
+                document.getElementById('td-join-code').innerHTML = `${currentTripObj.joinCode} <i class="fa-regular fa-copy"></i>`;
+                document.getElementById('td-role-badge').innerText = state.role;
+                
+                const sb = document.getElementById('td-status-badge');
+                sb.innerText = currentTripObj.status;
+                sb.className = `badge badge-${currentTripObj.status === 'Archived' ? 'archived' : 'active'}`;
+
+                // Setup DB Listeners for this trip
+                // 1. Members
+                const unsubMem = onSnapshot(query(collection(db, 'tripMembers'), where('tripId', '==', tripId)), (snap) => {
+                    state.members = snap.docs.map(d => ({ id: d.data().userId, ...d.data(), docId: d.id }));
+                    app.updateDashboardStats();
+                    if(document.getElementById('trip-tab-members').classList.contains('active')) app.renderMembers();
+                });
+                state.unsubscribers.push(unsubMem);
+
+                // 2. Expenses
+                const unsubExp = onSnapshot(query(collection(db, 'expenses'), where('tripId', '==', tripId), orderBy('date', 'desc')), (snap) => {
+                    state.expenses = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    app.updateDashboardStats();
+                    if(document.getElementById('trip-tab-expenses').classList.contains('active')) app.renderExpenses();
+                    app.renderRecentExpenses();
+                });
+                state.unsubscribers.push(unsubExp);
+
+                ui.showView('view-trip-detail');
+                // Select dashboard tab by default
+                document.querySelector('.trip-nav-item[data-target="trip-tab-dashboard"]').click();
+                ui.setLoading(false);
+            },
+
+            updateDashboardStats: () => {
+                let total = 0;
+                let youPaid = 0;
+                let yourShare = 0;
+
+                state.expenses.forEach(ex => {
+                    total += ex.amount;
+                    if(ex.paidBy === state.user.uid) youPaid += ex.amount;
+                    if(ex.splitData && ex.splitData[state.user.uid]) {
+                        yourShare += ex.splitData[state.user.uid];
+                    }
+                });
+
+                document.getElementById('stat-total-expense').innerText = ui.formatCurrency(total);
+                document.getElementById('stat-you-paid').innerText = ui.formatCurrency(youPaid);
+                document.getElementById('stat-your-share').innerText = ui.formatCurrency(yourShare);
+
+                const net = youPaid - yourShare;
+                const balEl = document.getElementById('stat-balance');
+                const lblEl = document.getElementById('stat-balance-label');
+                
+                if(net > 0.01) {
+                    balEl.innerText = "+" + ui.formatCurrency(net);
+                    balEl.className = 'stat-value text-success';
+                    lblEl.innerText = "You Get Back";
+                } else if (net < -0.01) {
+                    balEl.innerText = ui.formatCurrency(Math.abs(net));
+                    balEl.className = 'stat-value text-danger';
+                    lblEl.innerText = "You Owe";
+                } else {
+                    balEl.innerText = "Settled";
+                    balEl.className = 'stat-value text-muted';
+                    lblEl.innerText = "Net Balance";
+                }
+            },
+
+            renderRecentExpenses: () => {
+                const container = document.getElementById('list-recent-expenses');
+                container.innerHTML = '';
+                const recent = state.expenses.slice(0, 5);
+                
+                if(recent.length === 0) {
+                    container.innerHTML = `<p class="text-muted text-sm p-4 text-center">No expenses yet.</p>`;
+                    return;
+                }
+
+                recent.forEach(ex => {
+                    const payer = state.members.find(m => m.id === ex.paidBy);
+                    const payerName = payer ? (payer.id === state.user.uid ? 'You' : payer.name.split(' ')[0]) : 'Unknown';
+                    container.innerHTML += `
+                        <div class="data-item !p-3">
+                            <div class="data-item-left">
+                                <div class="data-icon" style="width:32px;height:32px;font-size:1rem;"><i class="fa-solid fa-receipt"></i></div>
+                                <div>
+                                    <p class="font-medium text-sm">${ex.description}</p>
+                                    <p class="text-xs text-secondary">${payerName} paid</p>
+                                </div>
+                            </div>
+                            <div class="font-semibold text-sm">${ui.formatCurrency(ex.amount)}</div>
+                        </div>
+                    `;
+                });
+            },
+
+            // EXPENSE MANAGEMENT
+            
+            openAddExpenseModal: (expenseId = null) => {
+                if(state.role === 'VIEWER' || state.currentTrip.status === 'Archived') return;
+
+                const form = document.getElementById('form-expense');
+                form.reset();
+                
+                // Populate members dropdown
+                const select = document.getElementById('ex-paidby');
+                select.innerHTML = '';
+                state.members.forEach(m => {
+                    select.innerHTML += `<option value="${m.id}" ${m.id === state.user.uid ? 'selected' : ''}>${m.name} ${m.id===state.user.uid?'(You)':''}</option>`;
+                });
+
+                document.getElementById('ex-date').valueAsDate = new Date();
+                document.getElementById('ex-id').value = '';
+                document.getElementById('modal-expense-title').innerText = 'Add Expense';
+
+                if(expenseId) {
+                    const ex = state.expenses.find(e => e.id === expenseId);
+                    if(ex) {
+                        document.getElementById('ex-id').value = ex.id;
+                        document.getElementById('ex-desc').value = ex.description;
+                        document.getElementById('ex-amount').value = ex.amount;
+                        document.getElementById('ex-date').value = ex.date;
+                        document.getElementById('ex-category').value = ex.category;
+                        document.getElementById('ex-paidby').value = ex.paidBy;
+                        document.getElementById('ex-split-type').value = ex.splitType;
+                        document.getElementById('modal-expense-title').innerText = 'Edit Expense';
+                        // Keep split data in global temporarily
+                        app._tempEditSplitData = ex.splitData;
+                    }
+                } else {
+                    app._tempEditSplitData = null;
+                }
+
+                app.renderSplitInputs();
+                ui.showModal('modal-expense');
+            },
+
+            renderSplitInputs: () => {
+                const type = document.getElementById('ex-split-type').value;
+                const container = document.getElementById('ex-split-container');
+                container.innerHTML = '';
+                document.getElementById('ex-split-validation').classList.add('hidden');
+
+                if (type === 'EQUAL') {
+                    container.innerHTML = `<p class="text-sm text-secondary p-2 bg-surface-hover rounded"><i class="fa-solid fa-scale-balanced"></i> Amount will be split equally among all ${state.members.length} members.</p>`;
+                    return;
+                }
+
+                state.members.forEach(m => {
+                    let val = '';
+                    if(app._tempEditSplitData && app._tempEditSplitData[m.id]) {
+                        val = app._tempEditSplitData[m.id];
+                        // If percentage, we need to reverse calc. For simplicity, just reset custom on edit if complex.
+                        // For a robust system, store actual percentages if PERCENTAGE type.
+                    }
+
+                    container.innerHTML += `
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-sm">${m.name}</span>
+                            <div class="flex items-center gap-1" style="width: 120px;">
+                                ${type === 'PERCENTAGE' ? '' : '<span class="text-muted">₹</span>'}
+                                <input type="number" class="form-control text-right split-val-input" data-uid="${m.id}" step="0.01" placeholder="0" value="${val}">
+                                ${type === 'PERCENTAGE' ? '<span class="text-muted">%</span>' : ''}
+                            </div>
+                        </div>
+                    `;
+                });
+            },
+
+            submitExpense: async () => {
+                const id = document.getElementById('ex-id').value;
+                const desc = document.getElementById('ex-desc').value.trim();
+                const amt = parseFloat(document.getElementById('ex-amount').value);
+                const date = document.getElementById('ex-date').value;
+                const cat = document.getElementById('ex-category').value;
+                const paidBy = document.getElementById('ex-paidby').value;
+                const splitType = document.getElementById('ex-split-type').value;
+
+                if(!desc || !amt || !date || !paidBy) return ui.toast('Please fill all required fields.', 'error');
+                if(amt <= 0) return ui.toast('Amount must be greater than 0', 'error');
+
+                const splitData = {};
+                const valEl = document.getElementById('ex-split-validation');
+                
+                if (splitType === 'EQUAL') {
+                    const share = Math.round((amt / state.members.length) * 100) / 100;
+                    // handle rounding remainder
+                    let diff = amt - (share * state.members.length);
+                    state.members.forEach((m, i) => {
+                        splitData[m.id] = share + (i === 0 ? diff : 0); // give diff to first person
+                    });
+                } else {
+                    let total = 0;
+                    document.querySelectorAll('.split-val-input').forEach(inp => {
+                        const v = parseFloat(inp.value) || 0;
+                        total += v;
+                        const uid = inp.getAttribute('data-uid');
+                        
+                        if (splitType === 'PERCENTAGE') {
+                            splitData[uid] = Math.round((amt * (v / 100)) * 100) / 100;
+                        } else {
+                            splitData[uid] = v;
+                        }
+                    });
+
+                    if (splitType === 'PERCENTAGE' && Math.abs(total - 100) > 0.1) {
+                        valEl.innerText = `Total percentage must be 100%. Current: ${total}%`;
+                        valEl.classList.remove('hidden');
+                        return;
+                    }
+                    if (splitType === 'CUSTOM' && Math.abs(total - amt) > 0.1) {
+                        valEl.innerText = `Total split amounts (₹${total}) must equal expense amount (₹${amt}).`;
+                        valEl.classList.remove('hidden');
+                        return;
+                    }
+                    
+                    // Fix percentage rounding diff
+                    if(splitType === 'PERCENTAGE') {
+                        let sumCalc = Object.values(splitData).reduce((a,b)=>a+b,0);
+                        let diff = amt - sumCalc;
+                        if(Math.abs(diff) > 0.001) splitData[state.members[0].id] += diff;
+                    }
+                }
+
+                ui.setLoading(true);
+                try {
+                    const exData = {
+                        tripId: state.currentTripId,
+                        description: desc,
+                        amount: amt,
+                        date,
+                        category: cat,
+                        paidBy,
+                        splitType,
+                        splitData,
+                        createdBy: id ? undefined : state.user.uid,
+                        updatedAt: serverTimestamp()
+                    };
+
+                    if(id) {
+                        await updateDoc(doc(db, 'expenses', id), exData);
+                        ui.toast('Expense updated');
+                    } else {
+                        exData.createdAt = serverTimestamp();
+                        await setDoc(doc(collection(db, 'expenses')), exData);
+                        ui.toast('Expense added');
+                    }
+                    ui.hideModal('modal-expense');
+                } catch(e) {
+                    ui.toast(e.message, 'error');
+                }
+                ui.setLoading(false);
+            },
+
+            renderExpenses: (searchTerm = '') => {
+                const container = document.getElementById('list-all-expenses');
+                container.innerHTML = '';
+                
+                let list = state.expenses;
+                if(searchTerm) {
+                    const s = searchTerm.toLowerCase();
+                    list = list.filter(e => e.description.toLowerCase().includes(s) || e.category.toLowerCase().includes(s));
+                }
+
+                if(list.length === 0) {
+                    container.innerHTML = `<div class="empty-state"><i class="fa-solid fa-receipt"></i><p>No expenses found.</p></div>`;
+                    return;
+                }
+
+                list.forEach(ex => {
+                    const payer = state.members.find(m => m.id === ex.paidBy);
+                    const payerName = payer ? payer.name : 'Unknown';
+                    const myShare = ex.splitData[state.user.uid] || 0;
+                    
+                    container.innerHTML += `
+                        <div class="data-item border-b last:border-0 rounded-none cursor-pointer" onclick="app.openAddExpenseModal('${ex.id}')">
+                            <div class="data-item-left">
+                                <div class="data-icon"><i class="fa-solid fa-tag"></i></div>
+                                <div>
+                                    <p class="font-medium">${ex.description}</p>
+                                    <p class="text-xs text-secondary">${ui.formatDate(ex.date)} &bull; ${payerName} paid</p>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <div class="font-semibold text-primary">${ui.formatCurrency(ex.amount)}</div>
+                                <div class="text-xs text-muted">Your share: ${ui.formatCurrency(myShare)}</div>
+                            </div>
+                        </div>
+                    `;
+                });
+            },
+
+            // SMART SETTLEMENTS
+            
+            calculateSmartSettlements: () => {
+                const members = state.members;
+                const expenses = state.expenses;
+                
+                // 1. Calculate net balances
+                let balances = {};
+                members.forEach(m => balances[m.id] = 0);
+                
+                expenses.forEach(ex => {
+                    if(balances[ex.paidBy] !== undefined) balances[ex.paidBy] += ex.amount;
+                    for (let mId in ex.splitData) {
+                        if(balances[mId] !== undefined) balances[mId] -= ex.splitData[mId];
+                    }
+                });
+
+                // 2. Separate into debtors and creditors
+                let debtors = [];
+                let creditors = [];
+                for (let mId in balances) {
+                    let b = Math.round(balances[mId] * 100) / 100;
+                    if (b > 0.01) creditors.push({ id: mId, amount: b });
+                    else if (b < -0.01) debtors.push({ id: mId, amount: -b });
+                }
+
+                // Sort both descending
+                debtors.sort((a, b) => b.amount - a.amount);
+                creditors.sort((a, b) => b.amount - a.amount);
+
+                let settlements = [];
+                let i = 0, j = 0;
+
+                while (i < debtors.length && j < creditors.length) {
+                    let debtor = debtors[i];
+                    let creditor = creditors[j];
+                    
+                    let amount = Math.min(debtor.amount, creditor.amount);
+                    amount = Math.round(amount * 100) / 100;
+
+                    if (amount > 0) {
+                        settlements.push({
+                            payer: debtor.id,
+                            receiver: creditor.id,
+                            amount: amount
+                        });
+                    }
+
+                    debtor.amount -= amount;
+                    creditor.amount -= amount;
+
+                    if (debtor.amount < 0.01) i++;
+                    if (creditor.amount < 0.01) j++;
+                }
+
+                state.settlements = settlements;
+                app.renderSettlements();
+            },
+
+            renderSettlements: () => {
+                const container = document.getElementById('list-all-settlements');
+                container.innerHTML = '';
+
+                if(state.settlements.length === 0) {
+                    container.innerHTML = `<div class="empty-state bg-surface border border-color rounded-lg"><i class="fa-solid fa-check-double text-success"></i><p>All settled up! No transactions needed.</p></div>`;
+                    return;
+                }
+
+                state.settlements.forEach(s => {
+                    const payer = state.members.find(m => m.id === s.payer);
+                    const receiver = state.members.find(m => m.id === s.receiver);
+                    if(!payer || !receiver) return;
+
+                    const isMePayer = payer.id === state.user.uid;
+                    const isMeReceiver = receiver.id === state.user.uid;
+
+                    let bgClass = "bg-surface";
+                    if(isMePayer) bgClass = "bg-red-50"; // Light red hint (need custom class if strict vanilla, let's use border instead)
+                    
+                    const pName = isMePayer ? 'You' : payer.name.split(' ')[0];
+                    const rName = isMeReceiver ? 'You' : receiver.name.split(' ')[0];
+                    
+                    // Simple styling override for me
+                    const styleStr = isMePayer ? 'border-left: 4px solid var(--danger-color);' : (isMeReceiver ? 'border-left: 4px solid var(--success-color);' : '');
+
+                    container.innerHTML += `
+                        <div class="card p-4 mb-3 flex flex-col md:flex-row justify-between items-center gap-4" style="${styleStr}">
+                            <div class="flex items-center gap-4 w-full">
+                                <div class="text-center" style="flex:1">
+                                    <div class="font-medium ${isMePayer?'text-danger':''}">${pName}</div>
+                                    <div class="text-xs text-secondary">Pays</div>
+                                </div>
+                                <div class="text-center text-muted"><i class="fa-solid fa-arrow-right-long"></i></div>
+                                <div class="text-center" style="flex:1">
+                                    <div class="font-medium ${isMeReceiver?'text-success':''}">${rName}</div>
+                                    <div class="text-xs text-secondary">Receives</div>
+                                </div>
+                            </div>
+                            <div class="flex flex-col items-center md:items-end w-full md:w-auto">
+                                <div class="font-bold text-xl mb-2">${ui.formatCurrency(s.amount)}</div>
+                                ${receiver.upiId ? `<button class="btn btn-secondary text-xs w-full" onclick="app.copyText('${receiver.upiId}')"><i class="fa-solid fa-qrcode"></i> Copy UPI</button>` : ''}
+                            </div>
+                        </div>
+                    `;
+                });
+            },
+
+            // MEMBERS MANAGEMENT
+            renderMembers: () => {
+                const container = document.getElementById('list-all-members');
+                container.innerHTML = '';
+                
+                state.members.forEach(m => {
+                    container.innerHTML += `
+                        <div class="data-item border-b last:border-0 rounded-none cursor-pointer" onclick="app.openMemberProfile('${m.id}')">
+                            <div class="data-item-left">
+                                <img src="https://ui-avatars.com/api/?name=${m.name}" class="rounded-full" style="width:40px;height:40px;border-radius:50%;">
+                                <div>
+                                    <p class="font-medium">${m.name} ${m.id === state.user.uid ? '(You)' : ''}</p>
+                                    <p class="text-xs text-secondary">${m.email}</p>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <span class="badge badge-role">${m.role}</span>
+                            </div>
+                        </div>
+                    `;
+                });
+            },
+
+            openMemberProfile: (userId) => {
+                const m = state.members.find(x => x.id === userId);
+                if(!m) return;
+                app._tempProfileEditId = m.docId;
+
+                document.getElementById('prof-name').innerText = m.name;
+                document.getElementById('prof-email').innerText = m.email;
+                document.getElementById('prof-upi').value = m.upiId || 'Not provided';
+                document.getElementById('prof-role').value = m.role;
+
+                // Admin controls
+                const isAdmin = ['SUPER_ADMIN', 'ADMIN'].includes(state.role);
+                const isSelf = m.id === state.user.uid;
+                const isTargetSuperAdmin = m.role === 'SUPER_ADMIN';
+                
+                const footer = document.getElementById('prof-footer-admin');
+                const roleSelect = document.getElementById('prof-role');
+
+                if (isAdmin && !isSelf && !isTargetSuperAdmin) {
+                    footer.classList.remove('hidden');
+                    roleSelect.disabled = false;
+                } else {
+                    footer.classList.add('hidden');
+                    roleSelect.disabled = true;
+                }
+
+                ui.showModal('modal-profile');
+            },
+
+            updateMemberRole: async () => {
+                const newRole = document.getElementById('prof-role').value;
+                const docId = app._tempProfileEditId;
+                if(!docId) return;
+
+                ui.setLoading(true);
+                try {
+                    await updateDoc(doc(db, 'tripMembers', docId), { role: newRole });
+                    ui.toast('Role updated successfully');
+                    ui.hideModal('modal-profile');
+                } catch(e) {
+                    ui.toast(e.message, 'error');
+                }
+                ui.setLoading(false);
+            },
+
+            removeMember: async () => {
+                const docId = app._tempProfileEditId;
+                if(!docId) return;
+                
+                if(!confirm("Are you sure you want to remove this member? This cannot be undone.")) return;
+
+                ui.setLoading(true);
+                try {
+                    await deleteDoc(doc(db, 'tripMembers', docId));
+                    ui.toast('Member removed');
+                    ui.hideModal('modal-profile');
+                } catch(e) {
+                    ui.toast(e.message, 'error');
+                }
+                ui.setLoading(false);
+            },
+
+            // UTILITIES
+            shareWhatsApp: () => {
+                let text = `*${state.currentTrip.tripName}* Expense Summary\n\n`;
+                text += `Total Expenses: ${document.getElementById('stat-total-expense').innerText}\n\n`;
+                
+                if(state.settlements.length > 0) {
+                    text += `*Pending Settlements:*\n`;
+                    state.settlements.forEach(s => {
+                        const pName = state.members.find(m => m.id === s.payer)?.name.split(' ')[0] || 'Unknown';
+                        const rName = state.members.find(m => m.id === s.receiver)?.name.split(' ')[0] || 'Unknown';
+                        text += `• ${pName} pays ${rName}: ${ui.formatCurrency(s.amount)}\n`;
+                    });
+                } else {
+                    text += `All balances are settled! 🎉\n`;
+                }
+
+                text += `\nLink: https://yourdomain.com/join/${state.currentTrip.joinCode}`;
+                
+                const encoded = encodeURIComponent(text);
+                window.open(`https://wa.me/?text=${encoded}`, '_blank');
+            },
+
+            exportCSV: () => {
+                if(state.expenses.length === 0) return ui.toast('No data to export');
+                
+                let csv = "Date,Category,Description,Amount,Paid By\n";
+                state.expenses.forEach(ex => {
+                    const payer = state.members.find(m => m.id === ex.paidBy)?.name || 'Unknown';
+                    csv += `"${ex.date}","${ex.category}","${ex.description}",${ex.amount},"${payer}"\n`;
+                });
+
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement("a");
+                const url = URL.createObjectURL(blob);
+                link.setAttribute("href", url);
+                link.setAttribute("download", `${state.currentTrip.tripName}_Expenses.csv`);
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+        };
+
+        // Expose to global for HTML inline event handlers
+        window.app = app;
+        window.ui = ui;
+
+        // Initialize Application
+        document.addEventListener('DOMContentLoaded', app.init);
+
+    </script>
+</body>
+</html>
