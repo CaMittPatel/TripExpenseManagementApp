@@ -1326,6 +1326,14 @@
                     ui.hideModal('modal-create-trip');
                     document.getElementById('form-create-trip').reset();
                     ui.toast('Trip created successfully!');
+                    // Inject into local state immediately to prevent race condition before onSnapshot fires
+                    state.trips.push({
+                        id: tripId,
+                        tripName: name, destination: dest, description: desc,
+                        startDate: start, endDate: end, status: 'Active',
+                        joinCode: joinCode, createdBy: state.user.uid,
+                        userRole: 'SUPER_ADMIN'
+                    });
                     ui.setLoading(false);
                     app.openTrip(tripId);
                 } catch(e) {
