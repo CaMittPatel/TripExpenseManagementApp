@@ -588,16 +588,18 @@
     <!-- Global Loader -->
     <div id="global-loader">
         <div class="spinner" style="width: 48px; height: 48px; border-width: 4px;"></div>
-        <p class="text-secondary font-medium">Loading Travel Ledger...</p>
+        <p class="text-secondary font-medium">Loading TraWell...</p>
     </div>
 
     <!-- Login View -->
     <div id="view-login" class="view-section login-wrapper">
         <div class="card login-card shadow-lg">
             <div class="login-logo">
-                <i class="fa-solid fa-wallet"></i>
-                <h1 class="text-2xl mt-2 text-primary">Travel Ledger</h1>
-                <p class="text-secondary mt-2 mb-6">Smart expense management for your trips</p>
+                <i class="fa-solid fa-plane-departure text-3xl mb-2" style="color: var(--primary-color);"></i>
+                <h1 class="text-4xl mt-2 font-extrabold" style="letter-spacing: 1px;">
+                    <span style="color: var(--primary-color);">Tra</span><span style="color: #ffffff;">Well</span>
+                </h1>
+                <p class="text-secondary mt-2 mb-6" style="font-style: italic;">Travel Together. Settle Smarter.</p>
             </div>
             <button id="btn-google-login" class="btn btn-secondary w-full" style="padding: 0.75rem; font-size: 1rem;">
                 <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" style="width: 20px; height: 20px;">
@@ -615,8 +617,8 @@
         <!-- Navbar -->
         <nav class="navbar shadow-md" style="background-color: var(--bg-surface); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border-bottom: 1px solid var(--glass-border);">
             <div class="container nav-content" style="display: flex; justify-content: space-between; align-items: center; height: 100%;">
-                <div class="logo cursor-pointer" onclick="app.navigate('home')" style="font-weight: 800; font-size: 1.25rem; color: var(--primary-color);">
-                    <i class="fa-solid fa-plane-departure"></i> Travel Ledger ✈️
+                <div class="logo cursor-pointer" onclick="app.navigate('home')" style="font-weight: 800; font-size: 1.5rem;">
+                    <i class="fa-solid fa-plane-departure" style="color: var(--primary-color);"></i> <span style="color: var(--primary-color);">Tra</span><span style="color: #ffffff;">Well</span>
                 </div>
                 <div class="nav-actions" style="display: flex; gap: 1rem; align-items: center;">
                     <div id="offline-indicator" class="hidden text-warning text-sm font-medium flex items-center gap-1" title="Offline Mode - Changes will sync when online">
@@ -1141,6 +1143,11 @@
             </div>
         </div>
     </div>
+
+    <!-- Footer -->
+    <footer style="text-align: center; padding: 2rem 1rem; color: var(--text-muted); font-size: 0.85rem; margin-top: auto; opacity: 0.8;">
+        Prepared by CA Mitt S. Patel - 7878210001
+    </footer>
 
     <!-- Toast Container -->
     <div id="toast-container"></div>
