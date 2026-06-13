@@ -944,9 +944,14 @@
 
                 </form>
             </div>
-            <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="ui.hideModal('modal-expense')">Cancel</button>
-                <button class="btn btn-primary" onclick="app.submitExpense()">Save Expense</button>
+            <div class="modal-footer flex justify-between" style="width: 100%;">
+                <div>
+                    <button id="btn-delete-expense" class="btn btn-danger hidden" onclick="app.deleteExpense()">Delete</button>
+                </div>
+                <div class="flex gap-4">
+                    <button class="btn btn-secondary" onclick="ui.hideModal('modal-expense')">Cancel</button>
+                    <button class="btn btn-primary" onclick="app.submitExpense()">Save</button>
+                </div>
             </div>
         </div>
     </div>
@@ -1415,16 +1420,17 @@
                         return ui.toast('You are already a member of this trip.', 'warning');
                     }
 
-                    // Create join request
-                    await setDoc(doc(db, 'joinRequests', `${tripId}_${state.user.uid}`), {
-                        tripId, userId: state.user.uid, status: 'PENDING',
+                    // Join instantly
+                    await setDoc(doc(db, 'tripMembers', `${tripId}_${state.user.uid}`), {
+                        tripId, userId: state.user.uid, role: 'VIEWER',
                         name: state.user.displayName, email: state.user.email,
-                        requestedAt: serverTimestamp()
+                        joinedAt: serverTimestamp()
                     });
 
                     ui.setLoading(false);
                     ui.hideModal('modal-join-trip');
-                    ui.toast('Join request sent to Admins.');
+                    ui.toast('Joined trip successfully!');
+                    app.navigate('home');
                 } catch(e) {
                     ui.setLoading(false);
                     ui.toast(e.message, 'error');
@@ -1484,12 +1490,19 @@
             deleteTrip: async () => {
                 if(state.role !== 'SUPER_ADMIN') return;
                 
-                const conf = prompt(`To delete this trip, type the trip name "${state.currentTrip.tripName}"`);
-                if(conf !== state.currentTrip.tripName) return;
+                const conf = prompt(`To delete this trip, type the exact trip name: ${state.currentTrip.tripName}`);
+                if(conf !== state.currentTrip.tripName) {
+                    ui.toast('Trip name did not match. Deletion cancelled.', 'warning');
+                    return;
+                }
 
                 ui.setLoading(true);
                 try {
                     await deleteDoc(doc(db, 'trips', state.currentTripId));
+                    // Manually clear cache so it doesn't reappear
+                    state.trips = state.trips.filter(t => t.id !== state.currentTripId);
+                    CacheDB.set(`user_trips_${state.user.uid}`, state.trips);
+                    
                     ui.toast('Trip deleted permanently');
                     ui.hideModal('modal-trip-settings');
                     app.navigate('home');
@@ -1651,6 +1664,7 @@
                 document.getElementById('ex-date').valueAsDate = new Date();
                 document.getElementById('ex-id').value = '';
                 document.getElementById('modal-expense-title').innerText = 'Add Expense';
+                document.getElementById('btn-delete-expense').classList.add('hidden');
 
                 if(expenseId) {
                     const ex = state.expenses.find(e => e.id === expenseId);
@@ -1663,6 +1677,7 @@
                         document.getElementById('ex-paidby').value = ex.paidBy;
                         document.getElementById('ex-split-type').value = ex.splitType;
                         document.getElementById('modal-expense-title').innerText = 'Edit Expense';
+                        document.getElementById('btn-delete-expense').classList.remove('hidden');
                         // Keep split data in global temporarily
                         app._tempEditSplitData = ex.splitData;
                     }
@@ -1784,6 +1799,23 @@
                         await setDoc(doc(collection(db, 'expenses')), exData);
                         ui.toast('Expense added');
                     }
+                    ui.hideModal('modal-expense');
+                } catch(e) {
+                    ui.toast(e.message, 'error');
+                }
+                ui.setLoading(false);
+            },
+
+            deleteExpense: async () => {
+                const id = document.getElementById('ex-id').value;
+                if(!id) return;
+                
+                if(!confirm("Are you sure you want to delete this expense?")) return;
+
+                ui.setLoading(true);
+                try {
+                    await deleteDoc(doc(db, 'expenses', id));
+                    ui.toast('Expense deleted');
                     ui.hideModal('modal-expense');
                 } catch(e) {
                     ui.toast(e.message, 'error');
