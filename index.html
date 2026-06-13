@@ -699,12 +699,12 @@
                     <div class="trip-nav-item" data-target="trip-tab-expenses">💸 Expenses</div>
                     <div class="trip-nav-item" data-target="trip-tab-settlements">🤝 Settlements</div>
                     <div class="trip-nav-item" data-target="trip-tab-members">👥 Members</div>
-                    <div class="trip-nav-item btn-admin-req hidden" data-target="trip-tab-reports">📈 Reports</div>
+                    <div class="trip-nav-item" data-target="trip-tab-reports">📈 Ledger</div>
                 </div>
 
                 <!-- Dashboard Tab -->
                 <div id="trip-tab-dashboard" class="trip-tab-content">
-                    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                    <div class="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
                         <div class="card stat-card">
                             <div class="text-sm text-secondary">Total Expense 💰</div>
                             <div class="stat-value" id="stat-total-expense">₹0</div>
@@ -720,6 +720,10 @@
                         <div class="card stat-card">
                             <div class="text-sm text-secondary" id="stat-balance-label">Net Balance ⚖️</div>
                             <div class="stat-value" id="stat-balance">₹0</div>
+                        </div>
+                        <div class="card stat-card">
+                            <div class="text-sm text-secondary">Members 👥</div>
+                            <div class="stat-value" id="stat-total-members">0</div>
                         </div>
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -785,6 +789,17 @@
                             <!-- Rendered via JS -->
                         </div>
                     </div>
+                </div>
+
+                <!-- Ledger Tab -->
+                <div id="trip-tab-reports" class="trip-tab-content hidden">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-bold">Group Ledger 🧾</h2>
+                        <div class="flex gap-2">
+                            <button class="btn btn-secondary" onclick="app.renderReport('ledger')"><i class="fa-solid fa-arrows-rotate"></i> Refresh</button>
+                        </div>
+                    </div>
+                    <div id="report-container" class="mt-4"></div>
                 </div>
 
             </div>
@@ -1297,6 +1312,7 @@
                             if(targetId === 'trip-tab-expenses') app.renderExpenses();
                             if(targetId === 'trip-tab-settlements') app.calculateSmartSettlements();
                             if(targetId === 'trip-tab-members') app.renderMembers();
+                            if(targetId === 'trip-tab-reports') app.renderReport('ledger');
                         }
                     });
                 });
@@ -1673,6 +1689,7 @@
                 document.getElementById('stat-total-expense').innerText = ui.formatCurrency(total);
                 document.getElementById('stat-you-paid').innerText = ui.formatCurrency(youPaid);
                 document.getElementById('stat-your-share').innerText = ui.formatCurrency(yourShare);
+                document.getElementById('stat-total-members').innerText = state.members ? state.members.length : 0;
 
                 const net = youPaid - yourShare;
                 const balEl = document.getElementById('stat-balance');
