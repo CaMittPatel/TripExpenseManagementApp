@@ -736,6 +736,17 @@
                             <div id="list-my-settlements" class="data-list"></div>
                         </div>
                     </div>
+                    <div class="card mt-6">
+                        <div class="flex justify-between items-center mb-4 border-b pb-2 border-color">
+                            <h3 class="font-semibold">Category-Wise Expenses 📊</h3>
+                            <div class="flex gap-2">
+                                <button class="btn btn-secondary text-xs" onclick="app.toggleCategoryAccordion()"><i class="fa-solid fa-up-down"></i> Toggle All</button>
+                                <button class="btn btn-secondary text-xs" onclick="app.exportCategoryData()"><i class="fa-solid fa-file-excel text-success"></i> Excel</button>
+                            </div>
+                        </div>
+                        <div id="list-category-breakdown" class="data-list hidden"></div>
+                        <table id="category-export-table" style="display:none;"></table>
+                    </div>
                 </div>
 
                 <!-- Expenses Tab -->
@@ -1064,10 +1075,14 @@
         <div class="modal-content" style="max-width: 800px;">
             <div class="modal-header">
                 <h3 id="modal-ledger-title">Member Ledger 🧾</h3>
-                <button class="btn-icon" onclick="ui.hideModal('modal-detailed-ledger')"><i class="fa-solid fa-xmark"></i></button>
+                <div class="flex gap-2 items-center">
+                    <button class="btn btn-secondary text-xs" onclick="app.exportModalData('detailed-ledger-table', 'Ledger', 'excel')"><i class="fa-solid fa-file-excel text-success"></i> Excel</button>
+                    <button class="btn btn-secondary text-xs" onclick="app.exportModalData('detailed-ledger-table', 'Ledger', 'pdf')"><i class="fa-solid fa-file-pdf text-danger"></i> PDF</button>
+                    <button class="btn-icon ml-2" onclick="ui.hideModal('modal-detailed-ledger')"><i class="fa-solid fa-xmark"></i></button>
+                </div>
             </div>
             <div class="modal-body" style="overflow-x: auto; max-height: 60vh;">
-                <table class="w-full text-left border-collapse" style="min-width: 600px;">
+                <table id="detailed-ledger-table" class="w-full text-left border-collapse" style="min-width: 600px;">
                     <thead>
                         <tr class="border-b border-color text-secondary text-sm">
                             <th class="py-2 px-3">Date</th>
@@ -1095,15 +1110,20 @@
         <div class="modal-content" style="max-width: 700px;">
             <div class="modal-header">
                 <h3 id="modal-stat-breakdown-title">Stat Breakdown</h3>
-                <button class="btn-icon" onclick="ui.hideModal('modal-stat-breakdown')"><i class="fa-solid fa-xmark"></i></button>
+                <div class="flex gap-2 items-center">
+                    <button class="btn btn-secondary text-xs" onclick="app.exportModalData('stat-breakdown-table', 'Breakdown', 'excel')"><i class="fa-solid fa-file-excel text-success"></i> Excel</button>
+                    <button class="btn btn-secondary text-xs" onclick="app.exportModalData('stat-breakdown-table', 'Breakdown', 'pdf')"><i class="fa-solid fa-file-pdf text-danger"></i> PDF</button>
+                    <button class="btn-icon ml-2" onclick="ui.hideModal('modal-stat-breakdown')"><i class="fa-solid fa-xmark"></i></button>
+                </div>
             </div>
             <div class="modal-body" style="overflow-x: auto; max-height: 60vh;">
-                <table class="w-full text-left border-collapse" style="min-width: 500px;">
+                <table id="stat-breakdown-table" class="w-full text-left border-collapse" style="min-width: 500px;">
                     <thead>
                         <tr class="border-b border-color text-secondary text-sm">
                             <th class="py-2 px-3">Date</th>
                             <th class="py-2 px-3">Category</th>
                             <th class="py-2 px-3">Narration</th>
+                            <th class="py-2 px-3 text-right" id="stat-breakdown-total-expense-header" style="display:none;">Total Bill</th>
                             <th class="py-2 px-3 text-right" id="stat-breakdown-amount-header">Amount</th>
                         </tr>
                     </thead>
@@ -1125,6 +1145,10 @@
     <!-- SweetAlert2 for nice confirmation prompts (Optional, using native confirm for zero dependencies if strict, but adding lightweight cdn is fine) -->
     <!-- Let's stick to vanilla confirm to adhere to single file minimum deps -->
     
+    <!-- jsPDF for PDF Export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+
     <script type="module">
         /**
          * ==========================================
@@ -1718,6 +1742,7 @@
                     app.updateDashboardStats();
                     if(document.getElementById('trip-tab-expenses').classList.contains('active')) app.renderExpenses();
                     app.renderRecentExpenses();
+                    app.renderCategoryBreakdown();
                     app.calculateSmartSettlements();
                 });
                 state.unsubscribers.push(unsubExp);
@@ -1813,6 +1838,9 @@
 
                 document.getElementById('modal-stat-breakdown-title').innerText = title;
                 
+                let isShare = type === 'share';
+                document.getElementById('stat-breakdown-total-expense-header').style.display = isShare ? '' : 'none';
+
                 let tbodyHtml = '';
                 let grandTotal = 0;
 
@@ -1826,17 +1854,18 @@
                             <td class="py-3 px-3 text-secondary" style="white-space:nowrap;">${ui.formatDate(t.date)}</td>
                             <td class="py-3 px-3"><i class="fa-solid ${icon} mr-2"></i>${t.category || 'Expense'}</td>
                             <td class="py-3 px-3">${t.description}</td>
+                            ${isShare ? `<td class="py-3 px-3 text-right">${ui.formatCurrency(t.amount)}</td>` : ''}
                             <td class="py-3 px-3 text-right font-medium">${ui.formatCurrency(t.displayAmount)}</td>
                         </tr>
                     `;
                 });
 
                 if(!tbodyHtml) {
-                    tbodyHtml = '<tr><td colspan="4" class="text-center py-6 text-secondary">No transactions found.</td></tr>';
+                    tbodyHtml = `<tr><td colspan="${isShare ? 5 : 4}" class="text-center py-6 text-secondary">No transactions found.</td></tr>`;
                 } else {
                     tbodyHtml += `
                         <tr class="bg-surface-hover font-bold">
-                            <td colspan="3" class="py-3 px-3 text-right">Total</td>
+                            <td colspan="${isShare ? 4 : 3}" class="py-3 px-3 text-right">Total</td>
                             <td class="py-3 px-3 text-right">${ui.formatCurrency(grandTotal)}</td>
                         </tr>
                     `;
@@ -1845,6 +1874,72 @@
                 document.getElementById('stat-breakdown-amount-header').innerText = amountKey;
                 document.getElementById('stat-breakdown-tbody').innerHTML = tbodyHtml;
                 ui.showModal('modal-stat-breakdown');
+            },
+
+            renderCategoryBreakdown: () => {
+                const container = document.getElementById('list-category-breakdown');
+                const exportTable = document.getElementById('category-export-table');
+                container.innerHTML = '';
+                exportTable.innerHTML = '';
+
+                let categories = {};
+                state.expenses.forEach(ex => {
+                    if (ex.category === 'Contribution') return;
+                    const cat = ex.category || 'Miscellaneous';
+                    if (!categories[cat]) categories[cat] = { total: 0, items: [] };
+                    categories[cat].total += ex.amount;
+                    categories[cat].items.push(ex);
+                });
+
+                if (Object.keys(categories).length === 0) {
+                    container.innerHTML = '<p class="text-center text-secondary py-4">No categorised expenses found.</p>';
+                    return;
+                }
+
+                let exportHtml = '<tr><th>Category</th><th>Date</th><th>Narration</th><th>Amount</th></tr>';
+
+                Object.entries(categories).sort((a,b) => b[1].total - a[1].total).forEach(([cat, data]) => {
+                    let itemsHtml = '';
+                    data.items.forEach(item => {
+                        itemsHtml += `
+                            <div class="flex justify-between items-center py-2 border-b border-color last:border-0 text-sm">
+                                <div class="text-secondary">${ui.formatDate(item.date)} - ${item.description}</div>
+                                <div class="font-medium">${ui.formatCurrency(item.amount)}</div>
+                            </div>
+                        `;
+                        exportHtml += `<tr><td>${cat}</td><td>${ui.formatDate(item.date)}</td><td>${item.description}</td><td>${item.amount}</td></tr>`;
+                    });
+
+                    container.innerHTML += `
+                        <div class="border border-color rounded mb-2 overflow-hidden">
+                            <div class="bg-surface-hover p-3 flex justify-between items-center cursor-pointer cat-accordion-header" onclick="this.nextElementSibling.classList.toggle('hidden')">
+                                <div class="font-bold"><i class="fa-solid fa-folder text-secondary mr-2"></i> ${cat}</div>
+                                <div class="font-bold">${ui.formatCurrency(data.total)} <i class="fa-solid fa-chevron-down text-xs ml-2 text-muted"></i></div>
+                            </div>
+                            <div class="p-3 bg-surface hidden cat-accordion-content">
+                                ${itemsHtml}
+                            </div>
+                        </div>
+                    `;
+                });
+
+                exportTable.innerHTML = exportHtml;
+                container.classList.remove('hidden');
+            },
+
+            toggleCategoryAccordion: () => {
+                const contents = document.querySelectorAll('.cat-accordion-content');
+                let allHidden = true;
+                contents.forEach(c => { if(!c.classList.contains('hidden')) allHidden = false; });
+                
+                contents.forEach(c => {
+                    if (allHidden) c.classList.remove('hidden');
+                    else c.classList.add('hidden');
+                });
+            },
+
+            exportCategoryData: () => {
+                app.exportModalData('category-export-table', 'Category_Wise_Expenses', 'excel');
             },
 
             renderRecentExpenses: () => {
@@ -2223,6 +2318,7 @@
 
                 state.settlements = settlements;
                 app.renderSettlements();
+                app.renderMySettlements();
             },
 
             renderSettlements: () => {
@@ -2270,6 +2366,44 @@
                             </div>
                         </div>
                     `;
+                });
+            },
+
+            renderMySettlements: () => {
+                const container = document.getElementById('list-my-settlements');
+                container.innerHTML = '';
+
+                const mySettlements = state.settlements.filter(s => s.payer === state.user.uid || s.receiver === state.user.uid);
+
+                if(mySettlements.length === 0) {
+                    container.innerHTML = `<p class="text-muted text-sm p-4 text-center">You are all settled up! 🎉</p>`;
+                    return;
+                }
+
+                mySettlements.forEach(s => {
+                    const isMePayer = s.payer === state.user.uid;
+                    const otherId = isMePayer ? s.receiver : s.payer;
+                    const otherName = state.members.find(m => m.id === otherId)?.name || 'Unknown';
+                    
+                    if (isMePayer) {
+                        container.innerHTML += `
+                            <div class="data-item !p-3 flex justify-between items-center border-l-4" style="border-left-color: var(--danger-color)">
+                                <div>
+                                    <div class="font-medium">Payable to ${otherName}</div>
+                                </div>
+                                <div class="font-bold text-danger">₹${ui.formatCurrency(s.amount)}</div>
+                            </div>
+                        `;
+                    } else {
+                        container.innerHTML += `
+                            <div class="data-item !p-3 flex justify-between items-center border-l-4" style="border-left-color: var(--success-color)">
+                                <div>
+                                    <div class="font-medium">Receivable from ${otherName}</div>
+                                </div>
+                                <div class="font-bold text-success">₹${ui.formatCurrency(s.amount)}</div>
+                            </div>
+                        `;
+                    }
                 });
             },
 
@@ -2596,6 +2730,36 @@
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
+            },
+
+            exportModalData: (tableId, title, format) => {
+                if (format === 'pdf') {
+                    if (!window.jspdf) return ui.toast('PDF library not loaded yet', 'error');
+                    const { jsPDF } = window.jspdf;
+                    const doc = new jsPDF();
+                    doc.text(`${state.currentTrip.tripName} - ${title}`, 14, 15);
+                    doc.autoTable({ html: `#${tableId}`, startY: 20 });
+                    doc.save(`${state.currentTrip.tripName}_${title}.pdf`);
+                } else if (format === 'excel') {
+                    const table = document.getElementById(tableId);
+                    let csv = [];
+                    for (let i = 0; i < table.rows.length; i++) {
+                        let row = [], cols = table.rows[i].querySelectorAll('td, th');
+                        for (let j = 0; j < cols.length; j++) {
+                            if(cols[j].style.display !== 'none') {
+                                row.push('"' + cols[j].innerText.replace(/"/g, '""') + '"');
+                            }
+                        }
+                        csv.push(row.join(','));
+                    }
+                    const blob = new Blob([csv.join('\n')], { type: 'text/csv;charset=utf-8;' });
+                    const link = document.createElement("a");
+                    link.setAttribute("href", URL.createObjectURL(blob));
+                    link.setAttribute("download", `${state.currentTrip.tripName}_${title}.csv`);
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                }
             }
         };
 
