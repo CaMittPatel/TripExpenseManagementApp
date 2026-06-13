@@ -2234,6 +2234,116 @@
                 window.open(`https://wa.me/?text=${encoded}`, '_blank');
             },
 
+            renderReport: (type) => {
+                const container = document.getElementById('report-container');
+                const ex = state.expenses;
+                if(ex.length === 0) {
+                    container.innerHTML = '<div class="card text-center text-secondary">No expenses found to generate reports.</div>';
+                    return;
+                }
+
+                let html = '';
+
+                if (type === 'ledger') {
+                    html += `<h3 class="font-bold mb-4">Individual Member Ledgers</h3>`;
+                    
+                    state.members.forEach(m => {
+                        let totalPaid = 0;
+                        let totalConsumed = 0;
+                        
+                        ex.forEach(e => {
+                            if(e.paidBy === m.id) totalPaid += e.amount;
+                            if(e.splitData && e.splitData[m.id]) totalConsumed += e.splitData[m.id];
+                        });
+                        
+                        if(totalPaid > 0 || totalConsumed > 0) {
+                            const net = totalPaid - totalConsumed;
+                            const netClass = net > 0 ? 'text-success' : (net < 0 ? 'text-danger' : 'text-muted');
+                            const netText = net > 0 ? 'Receivable' : (net < 0 ? 'Payable' : 'Settled');
+                            
+                            html += `
+                                <div class="card mb-4 border-l-4" style="border-left-color: ${net > 0 ? 'var(--success-color)' : (net < 0 ? 'var(--danger-color)' : 'gray')}">
+                                    <h4 class="font-bold text-lg mb-2">${m.name}</h4>
+                                    <div class="grid grid-cols-3 gap-2 text-sm text-center">
+                                        <div class="bg-surface-hover p-2 rounded">
+                                            <div class="text-secondary mb-1">Paid</div>
+                                            <div class="font-bold">${ui.formatCurrency(totalPaid)}</div>
+                                        </div>
+                                        <div class="bg-surface-hover p-2 rounded">
+                                            <div class="text-secondary mb-1">Consumed</div>
+                                            <div class="font-bold">${ui.formatCurrency(totalConsumed)}</div>
+                                        </div>
+                                        <div class="bg-surface-hover p-2 rounded">
+                                            <div class="text-secondary mb-1">${netText}</div>
+                                            <div class="font-bold ${netClass}">${ui.formatCurrency(Math.abs(net))}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                        }
+                    });
+                } 
+                else if (type === 'category') {
+                    html += `<h3 class="font-bold mb-4">Category-Wise Breakdown</h3>`;
+                    const catTotals = {};
+                    let grandTotal = 0;
+                    
+                    ex.forEach(e => {
+                        const c = e.category || 'Miscellaneous';
+                        if(!catTotals[c]) catTotals[c] = 0;
+                        catTotals[c] += e.amount;
+                        grandTotal += e.amount;
+                    });
+                    
+                    const sorted = Object.entries(catTotals).sort((a,b) => b[1] - a[1]);
+                    
+                    html += `<div class="card p-0"><div class="data-list" style="gap:0">`;
+                    sorted.forEach(([cat, amt]) => {
+                        const pct = ((amt / grandTotal) * 100).toFixed(1);
+                        html += `
+                            <div class="data-item border-b last:border-0 rounded-none">
+                                <div class="flex-1">
+                                    <div class="flex justify-between mb-1">
+                                        <span class="font-medium">${cat}</span>
+                                        <span class="font-bold">${ui.formatCurrency(amt)}</span>
+                                    </div>
+                                    <div class="text-xs text-secondary mb-1">${pct}% of total</div>
+                                    <div class="w-full bg-surface-hover rounded-full h-2">
+                                        <div class="bg-primary h-2 rounded-full" style="width: ${pct}%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    html += `</div></div>`;
+                }
+                else if (type === 'date') {
+                    html += `<h3 class="font-bold mb-4">Date-Wise Breakdown</h3>`;
+                    const dateTotals = {};
+                    
+                    ex.forEach(e => {
+                        const d = e.date || 'Unknown';
+                        if(!dateTotals[d]) dateTotals[d] = 0;
+                        dateTotals[d] += e.amount;
+                    });
+                    
+                    const sorted = Object.entries(dateTotals).sort((a,b) => new Date(b[0]) - new Date(a[0]));
+                    
+                    html += `<div class="card p-0"><div class="data-list" style="gap:0">`;
+                    sorted.forEach(([date, amt]) => {
+                        html += `
+                            <div class="data-item border-b last:border-0 rounded-none flex justify-between items-center">
+                                <span class="font-medium"><i class="fa-regular fa-calendar text-secondary mr-2"></i> ${ui.formatDate(date)}</span>
+                                <span class="font-bold">${ui.formatCurrency(amt)}</span>
+                            </div>
+                        `;
+                    });
+                    html += `</div></div>`;
+                }
+
+                container.innerHTML = html;
+            },
+
             exportCSV: () => {
                 if(state.expenses.length === 0) return ui.toast('No data to export');
                 
