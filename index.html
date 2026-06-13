@@ -705,15 +705,15 @@
                 <!-- Dashboard Tab -->
                 <div id="trip-tab-dashboard" class="trip-tab-content">
                     <div class="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
-                        <div class="card stat-card">
+                        <div class="card stat-card card-interactive cursor-pointer" onclick="app.viewStatBreakdown('total')">
                             <div class="text-sm text-secondary">Total Expense 💰</div>
                             <div class="stat-value" id="stat-total-expense">₹0</div>
                         </div>
-                        <div class="card stat-card">
+                        <div class="card stat-card card-interactive cursor-pointer" onclick="app.viewStatBreakdown('share')">
                             <div class="text-sm text-secondary">Your Share 🍔</div>
                             <div class="stat-value text-warning" id="stat-your-share">₹0</div>
                         </div>
-                        <div class="card stat-card">
+                        <div class="card stat-card card-interactive cursor-pointer" onclick="app.viewStatBreakdown('paid')">
                             <div class="text-sm text-secondary">You Paid 💳</div>
                             <div class="stat-value text-success" id="stat-you-paid">₹0</div>
                         </div>
@@ -1086,6 +1086,34 @@
             </div>
             <div class="modal-footer justify-end">
                 <button class="btn btn-secondary" onclick="ui.hideModal('modal-detailed-ledger')">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stat Breakdown Modal -->
+    <div id="modal-stat-breakdown" class="modal-overlay">
+        <div class="modal-content" style="max-width: 700px;">
+            <div class="modal-header">
+                <h3 id="modal-stat-breakdown-title">Stat Breakdown</h3>
+                <button class="btn-icon" onclick="ui.hideModal('modal-stat-breakdown')"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body" style="overflow-x: auto; max-height: 60vh;">
+                <table class="w-full text-left border-collapse" style="min-width: 500px;">
+                    <thead>
+                        <tr class="border-b border-color text-secondary text-sm">
+                            <th class="py-2 px-3">Date</th>
+                            <th class="py-2 px-3">Category</th>
+                            <th class="py-2 px-3">Narration</th>
+                            <th class="py-2 px-3 text-right" id="stat-breakdown-amount-header">Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody id="stat-breakdown-tbody" class="text-sm">
+                        <!-- Populated by JS -->
+                    </tbody>
+                </table>
+            </div>
+            <div class="modal-footer justify-end">
+                <button class="btn btn-secondary" onclick="ui.hideModal('modal-stat-breakdown')">Close</button>
             </div>
         </div>
     </div>
@@ -1741,6 +1769,82 @@
                     balEl.className = 'stat-value text-muted';
                     label.innerText = "Net Balance";
                 }
+            },
+
+            viewStatBreakdown: (type) => {
+                let title = '';
+                let transactions = [];
+                let amountKey = ''; 
+
+                const sorted = [...state.expenses].sort((a, b) => {
+                    const dateDiff = new Date(a.date) - new Date(b.date);
+                    if(dateDiff !== 0) return dateDiff;
+                    const aTime = a.createdAt?.seconds || 0;
+                    const bTime = b.createdAt?.seconds || 0;
+                    return aTime - bTime;
+                });
+
+                if (type === 'total') {
+                    title = "Total Expense 💰";
+                    amountKey = 'Amount';
+                    sorted.forEach(t => {
+                        if (t.category !== 'Contribution') {
+                            transactions.push({...t, displayAmount: t.amount});
+                        }
+                    });
+                } else if (type === 'share') {
+                    title = "Your Share 🍔";
+                    amountKey = 'Consumed';
+                    sorted.forEach(t => {
+                        const mySplit = t.splitData[state.user.uid] || 0;
+                        if (mySplit > 0) {
+                            transactions.push({...t, displayAmount: mySplit});
+                        }
+                    });
+                } else if (type === 'paid') {
+                    title = "You Paid 💳";
+                    amountKey = 'Paid';
+                    sorted.forEach(t => {
+                        if (t.paidBy === state.user.uid && t.amount > 0) {
+                            transactions.push({...t, displayAmount: t.amount});
+                        }
+                    });
+                }
+
+                document.getElementById('modal-stat-breakdown-title').innerText = title;
+                
+                let tbodyHtml = '';
+                let grandTotal = 0;
+
+                transactions.forEach(t => {
+                    grandTotal += t.displayAmount;
+                    const isContribution = t.category === 'Contribution';
+                    const icon = isContribution ? 'fa-hand-holding-dollar text-success' : 'fa-receipt text-secondary';
+                    
+                    tbodyHtml += `
+                        <tr class="border-b border-color hover:bg-surface-hover transition-colors">
+                            <td class="py-3 px-3 text-secondary" style="white-space:nowrap;">${ui.formatDate(t.date)}</td>
+                            <td class="py-3 px-3"><i class="fa-solid ${icon} mr-2"></i>${t.category || 'Expense'}</td>
+                            <td class="py-3 px-3">${t.description}</td>
+                            <td class="py-3 px-3 text-right font-medium">${ui.formatCurrency(t.displayAmount)}</td>
+                        </tr>
+                    `;
+                });
+
+                if(!tbodyHtml) {
+                    tbodyHtml = '<tr><td colspan="4" class="text-center py-6 text-secondary">No transactions found.</td></tr>';
+                } else {
+                    tbodyHtml += `
+                        <tr class="bg-surface-hover font-bold">
+                            <td colspan="3" class="py-3 px-3 text-right">Total</td>
+                            <td class="py-3 px-3 text-right">${ui.formatCurrency(grandTotal)}</td>
+                        </tr>
+                    `;
+                }
+                
+                document.getElementById('stat-breakdown-amount-header').innerText = amountKey;
+                document.getElementById('stat-breakdown-tbody').innerHTML = tbodyHtml;
+                ui.showModal('modal-stat-breakdown');
             },
 
             renderRecentExpenses: () => {
