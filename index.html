@@ -1592,18 +1592,36 @@
                 document.querySelectorAll('.btn-add-expense-req').forEach(el => el.style.display = canEdit ? 'inline-flex' : 'none');
                 document.querySelectorAll('.btn-admin-req').forEach(el => el.style.display = isAdmin ? 'inline-flex' : 'none');
 
-                document.getElementById('td-name').innerText = currentTripObj.tripName;
-                document.getElementById('td-dest').innerText = currentTripObj.destination || 'No destination set';
-                document.getElementById('td-dates').innerText = `${ui.formatDate(currentTripObj.startDate)} - ${ui.formatDate(currentTripObj.endDate)}`;
                 document.getElementById('td-join-code').innerHTML = `${currentTripObj.joinCode} <i class="fa-regular fa-copy"></i>`;
                 document.getElementById('td-role-badge').innerText = state.role;
-                
-                const sb = document.getElementById('td-status-badge');
-                sb.innerText = currentTripObj.status;
-                sb.className = `badge badge-${currentTripObj.status === 'Archived' ? 'archived' : 'active'}`;
 
                 // Setup DB Listeners for this trip
-                // 1. Members
+                // 1. Trip Details
+                const unsubTrip = onSnapshot(doc(db, 'trips', tripId), (dSnap) => {
+                    if(!dSnap.exists()) return;
+                    const d = dSnap.data();
+                    state.currentTripObj = d;
+                    state.currentTrip = { id: tripId, ...d, userRole: state.role };
+                    
+                    document.getElementById('td-name').innerText = d.tripName;
+                    document.getElementById('td-dest').innerText = d.destination || 'No destination set';
+                    document.getElementById('td-dates').innerText = `${ui.formatDate(d.startDate)} - ${ui.formatDate(d.endDate)}`;
+                    
+                    const sb = document.getElementById('td-status-badge');
+                    sb.innerText = d.status || 'Active';
+                    sb.className = `badge badge-${d.status === 'Archived' ? 'archived' : 'active'}`;
+                    
+                    // Keep global trip list synced
+                    const idx = state.trips.findIndex(t => t.id === tripId);
+                    if(idx > -1) {
+                        state.trips[idx] = { ...state.trips[idx], ...d };
+                        CacheDB.set(`user_trips_${state.user.uid}`, state.trips);
+                    }
+                });
+                state.unsubscribers.push(unsubTrip);
+
+                // Setup DB Listeners for this trip
+                // 2. Members
                 const unsubMem = onSnapshot(query(collection(db, 'tripMembers'), where('tripId', '==', tripId)), (snap) => {
                     state.members = snap.docs.map(d => ({ id: d.data().userId, ...d.data(), docId: d.id }));
                     app.updateDashboardStats();
@@ -1611,12 +1629,14 @@
                 });
                 state.unsubscribers.push(unsubMem);
 
-                // 2. Expenses
-                const unsubExp = onSnapshot(query(collection(db, 'expenses'), where('tripId', '==', tripId), orderBy('date', 'desc')), (snap) => {
-                    state.expenses = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                // 3. Expenses
+                const unsubExp = onSnapshot(query(collection(db, 'expenses'), where('tripId', '==', tripId)), (snap) => {
+                    state.expenses = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+                                         .sort((a,b) => new Date(b.date) - new Date(a.date));
                     app.updateDashboardStats();
                     if(document.getElementById('trip-tab-expenses').classList.contains('active')) app.renderExpenses();
                     app.renderRecentExpenses();
+                    app.calculateSmartSettlements();
                 });
                 state.unsubscribers.push(unsubExp);
 
