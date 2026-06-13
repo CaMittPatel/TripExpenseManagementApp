@@ -699,17 +699,30 @@
 
                 <!-- Dashboard Tab -->
                 <div id="trip-tab-dashboard" class="trip-tab-content">
-                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                    <h3 class="font-semibold mb-3">Group Overview</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                         <div class="card stat-card">
-                            <div class="text-sm text-secondary">Total Expense</div>
+                            <div class="text-sm text-secondary">Trip Expenses (Excl. Contributions)</div>
                             <div class="stat-value" id="stat-total-expense">₹0</div>
                         </div>
                         <div class="card stat-card">
-                            <div class="text-sm text-secondary">Your Share</div>
+                            <div class="text-sm text-secondary">Total Contributions Pooled</div>
+                            <div class="stat-value text-primary" id="stat-pooled">₹0</div>
+                        </div>
+                        <div class="card stat-card">
+                            <div class="text-sm text-secondary">Unspent Group Funds</div>
+                            <div class="stat-value text-success" id="stat-unspent">₹0</div>
+                        </div>
+                    </div>
+
+                    <h3 class="font-semibold mb-3">Your Personal Summary</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                        <div class="card stat-card">
+                            <div class="text-sm text-secondary">Your Share Consumed</div>
                             <div class="stat-value text-warning" id="stat-your-share">₹0</div>
                         </div>
                         <div class="card stat-card">
-                            <div class="text-sm text-secondary">You Paid</div>
+                            <div class="text-sm text-secondary">You Paid (Out of pocket / Contributions)</div>
                             <div class="stat-value text-success" id="stat-you-paid">₹0</div>
                         </div>
                         <div class="card stat-card">
@@ -959,7 +972,7 @@
                 </div>
                 <div class="flex gap-4">
                     <button class="btn btn-secondary" onclick="ui.hideModal('modal-expense')">Cancel</button>
-                    <button class="btn btn-primary" onclick="app.submitExpense()">Save</button>
+                    <button id="btn-save-expense" class="btn btn-primary" onclick="app.submitExpense()">Save</button>
                 </div>
             </div>
         </div>
@@ -1650,38 +1663,79 @@
             },
 
             updateDashboardStats: () => {
-                let total = 0;
-                let youPaid = 0;
+                if(!state.currentTrip) return;
+
+                let totalTripExpense = 0;
+                let totalContributions = 0;
                 let yourShare = 0;
+                let youPaid = 0;
+
+                const poolReceived = {};
+                const expensesPaidBy = {};
+
+                state.members.forEach(m => {
+                    poolReceived[m.id] = 0;
+                    expensesPaidBy[m.id] = 0;
+                });
 
                 state.expenses.forEach(ex => {
-                    total += ex.amount;
-                    if(ex.paidBy === state.user.uid) youPaid += ex.amount;
-                    if(ex.splitData && ex.splitData[state.user.uid]) {
-                        yourShare += ex.splitData[state.user.uid];
+                    const mySplit = ex.splitData[state.user.uid] || 0;
+                    yourShare += mySplit;
+
+                    if(ex.paidBy === state.user.uid) {
+                        youPaid += ex.amount;
+                    }
+
+                    if (ex.category === 'Contribution') {
+                        totalContributions += ex.amount;
+                        for (let mId in ex.splitData) {
+                            if (poolReceived[mId] !== undefined) {
+                                poolReceived[mId] += ex.splitData[mId];
+                            }
+                        }
+                    } else {
+                        totalTripExpense += ex.amount;
+                        if (expensesPaidBy[ex.paidBy] !== undefined) {
+                            expensesPaidBy[ex.paidBy] += ex.amount;
+                        }
                     }
                 });
 
-                document.getElementById('stat-total-expense').innerText = ui.formatCurrency(total);
+                let totalUnspent = 0;
+                for (let mId in poolReceived) {
+                    const received = poolReceived[mId];
+                    const paid = expensesPaidBy[mId];
+                    const unspent = received - paid;
+                    if (unspent > 0) {
+                        totalUnspent += unspent;
+                    }
+                }
+
+                document.getElementById('stat-total-expense').innerText = ui.formatCurrency(totalTripExpense);
+                const elPooled = document.getElementById('stat-pooled');
+                if(elPooled) elPooled.innerText = ui.formatCurrency(totalContributions);
+                const elUnspent = document.getElementById('stat-unspent');
+                if(elUnspent) elUnspent.innerText = ui.formatCurrency(totalUnspent);
+
                 document.getElementById('stat-you-paid').innerText = ui.formatCurrency(youPaid);
                 document.getElementById('stat-your-share').innerText = ui.formatCurrency(yourShare);
 
                 const net = youPaid - yourShare;
                 const balEl = document.getElementById('stat-balance');
-                const lblEl = document.getElementById('stat-balance-label');
+                const label = document.getElementById('stat-balance-label');
                 
                 if(net > 0.01) {
                     balEl.innerText = "+" + ui.formatCurrency(net);
                     balEl.className = 'stat-value text-success';
-                    lblEl.innerText = "You Get Back";
+                    label.innerText = "You Get Back";
                 } else if (net < -0.01) {
                     balEl.innerText = ui.formatCurrency(Math.abs(net));
                     balEl.className = 'stat-value text-danger';
-                    lblEl.innerText = "You Owe";
+                    label.innerText = "You Owe";
                 } else {
                     balEl.innerText = "Settled";
                     balEl.className = 'stat-value text-muted';
-                    lblEl.innerText = "Net Balance";
+                    label.innerText = "Net Balance";
                 }
             },
 
@@ -1794,11 +1848,16 @@
                 document.getElementById('ex-date').valueAsDate = new Date();
                 document.getElementById('ex-id').value = '';
                 document.getElementById('modal-expense-title').innerText = 'Add Expense';
-                document.getElementById('btn-delete-expense').classList.add('hidden');
+                
+                let canEditContent = true;
 
                 if(expenseId) {
                     const ex = state.expenses.find(e => e.id === expenseId);
                     if(ex) {
+                        if (state.role === 'EDITOR' && ex.createdBy !== state.user.uid) {
+                            canEditContent = false;
+                        }
+                        
                         document.getElementById('ex-id').value = ex.id;
                         document.getElementById('ex-desc').value = ex.description;
                         document.getElementById('ex-amount').value = ex.amount;
@@ -1806,15 +1865,23 @@
                         document.getElementById('ex-category').value = ex.category;
                         document.getElementById('ex-paidby').value = ex.paidBy;
                         document.getElementById('ex-split-type').value = ex.splitType;
-                        document.getElementById('modal-expense-title').innerText = 'Edit Expense';
-                        document.getElementById('btn-delete-expense').classList.remove('hidden');
+                        document.getElementById('modal-expense-title').innerText = canEditContent ? 'Edit Expense' : 'View Expense';
                         // Keep split data in global temporarily
                         app._tempEditSplitData = ex.splitData;
                     }
                 } else {
                     app._tempEditSplitData = null;
                 }
+                
+                app._tempCanEditExpense = canEditContent;
+                
+                const inputs = form.querySelectorAll('input, select');
+                inputs.forEach(el => el.disabled = !canEditContent);
+                
+                document.getElementById('btn-save-expense').classList.toggle('hidden', !canEditContent);
+                document.getElementById('btn-delete-expense').classList.toggle('hidden', !canEditContent || !expenseId);
 
+                // Render split inputs
                 app.renderSplitInputs();
                 ui.showModal('modal-expense');
             },
@@ -1824,18 +1891,18 @@
                 const container = document.getElementById('ex-split-container');
                 container.innerHTML = '';
                 document.getElementById('ex-split-validation').classList.add('hidden');
-
+                
                 if (type === 'EQUAL') {
                     container.innerHTML = `<p class="text-sm text-secondary p-2 bg-surface-hover rounded"><i class="fa-solid fa-scale-balanced"></i> Amount will be split equally among all ${state.members.length} members.</p>`;
                     return;
                 }
+                
+                const disabledAttr = app._tempCanEditExpense === false ? 'disabled' : '';
 
                 state.members.forEach(m => {
                     let val = '';
                     if(app._tempEditSplitData && app._tempEditSplitData[m.id]) {
                         val = app._tempEditSplitData[m.id];
-                        // If percentage, we need to reverse calc. For simplicity, just reset custom on edit if complex.
-                        // For a robust system, store actual percentages if PERCENTAGE type.
                     }
 
                     container.innerHTML += `
@@ -1843,7 +1910,7 @@
                             <span class="text-sm">${m.name}</span>
                             <div class="flex items-center gap-1" style="width: 120px;">
                                 ${type === 'PERCENTAGE' ? '' : '<span class="text-muted">₹</span>'}
-                                <input type="number" class="form-control text-right split-val-input" data-uid="${m.id}" step="0.01" placeholder="0" value="${val}">
+                                <input type="number" class="form-control text-right split-val-input" data-uid="${m.id}" step="0.01" placeholder="0" value="${val}" ${disabledAttr}>
                                 ${type === 'PERCENTAGE' ? '<span class="text-muted">%</span>' : ''}
                             </div>
                         </div>
