@@ -699,30 +699,17 @@
 
                 <!-- Dashboard Tab -->
                 <div id="trip-tab-dashboard" class="trip-tab-content">
-                    <h3 class="font-semibold mb-3">Group Overview</h3>
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                         <div class="card stat-card">
-                            <div class="text-sm text-secondary">Trip Expenses (Excl. Contributions)</div>
+                            <div class="text-sm text-secondary">Total Expense</div>
                             <div class="stat-value" id="stat-total-expense">₹0</div>
                         </div>
                         <div class="card stat-card">
-                            <div class="text-sm text-secondary">Total Contributions Pooled</div>
-                            <div class="stat-value text-primary" id="stat-pooled">₹0</div>
-                        </div>
-                        <div class="card stat-card">
-                            <div class="text-sm text-secondary">Unspent Group Funds</div>
-                            <div class="stat-value text-success" id="stat-unspent">₹0</div>
-                        </div>
-                    </div>
-
-                    <h3 class="font-semibold mb-3">Your Personal Summary</h3>
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                        <div class="card stat-card">
-                            <div class="text-sm text-secondary">Your Share Consumed</div>
+                            <div class="text-sm text-secondary">Your Share</div>
                             <div class="stat-value text-warning" id="stat-your-share">₹0</div>
                         </div>
                         <div class="card stat-card">
-                            <div class="text-sm text-secondary">You Paid (Out of pocket / Contributions)</div>
+                            <div class="text-sm text-secondary">You Paid</div>
                             <div class="stat-value text-success" id="stat-you-paid">₹0</div>
                         </div>
                         <div class="card stat-card">
@@ -1665,58 +1652,21 @@
             updateDashboardStats: () => {
                 if(!state.currentTrip) return;
 
-                let totalTripExpense = 0;
-                let totalContributions = 0;
+                let total = 0;
                 let yourShare = 0;
                 let youPaid = 0;
 
-                const poolReceived = {};
-                const expensesPaidBy = {};
-
-                state.members.forEach(m => {
-                    poolReceived[m.id] = 0;
-                    expensesPaidBy[m.id] = 0;
-                });
-
                 state.expenses.forEach(ex => {
+                    total += ex.amount;
                     const mySplit = ex.splitData[state.user.uid] || 0;
                     yourShare += mySplit;
 
                     if(ex.paidBy === state.user.uid) {
                         youPaid += ex.amount;
                     }
-
-                    if (ex.category === 'Contribution') {
-                        totalContributions += ex.amount;
-                        for (let mId in ex.splitData) {
-                            if (poolReceived[mId] !== undefined) {
-                                poolReceived[mId] += ex.splitData[mId];
-                            }
-                        }
-                    } else {
-                        totalTripExpense += ex.amount;
-                        if (expensesPaidBy[ex.paidBy] !== undefined) {
-                            expensesPaidBy[ex.paidBy] += ex.amount;
-                        }
-                    }
                 });
 
-                let totalUnspent = 0;
-                for (let mId in poolReceived) {
-                    const received = poolReceived[mId];
-                    const paid = expensesPaidBy[mId];
-                    const unspent = received - paid;
-                    if (unspent > 0) {
-                        totalUnspent += unspent;
-                    }
-                }
-
-                document.getElementById('stat-total-expense').innerText = ui.formatCurrency(totalTripExpense);
-                const elPooled = document.getElementById('stat-pooled');
-                if(elPooled) elPooled.innerText = ui.formatCurrency(totalContributions);
-                const elUnspent = document.getElementById('stat-unspent');
-                if(elUnspent) elUnspent.innerText = ui.formatCurrency(totalUnspent);
-
+                document.getElementById('stat-total-expense').innerText = ui.formatCurrency(total);
                 document.getElementById('stat-you-paid').innerText = ui.formatCurrency(youPaid);
                 document.getElementById('stat-your-share').innerText = ui.formatCurrency(yourShare);
 
