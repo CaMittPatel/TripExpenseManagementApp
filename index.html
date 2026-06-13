@@ -908,9 +908,13 @@
             </div>
             <div class="modal-body">
                 <h3 class="mb-4">Join via Code 🔗</h3>
-                <div class="form-group">
+                <div class="form-group mb-4">
                     <label class="form-label">Enter 6-Character Join Code</label>
                     <input type="text" id="jt-code" class="form-control" style="text-transform: uppercase; letter-spacing: 2px; font-size:1.25rem; text-align:center;" maxlength="6" placeholder="XXXXXX">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Your UPI ID (Optional)</label>
+                    <input type="text" id="jt-upi" class="form-control" placeholder="username@bank">
                 </div>
             </div>
             <div class="modal-footer">
@@ -1570,12 +1574,19 @@
                         return ui.toast('You are already a member of this trip.', 'warning');
                     }
 
+                    const upiId = document.getElementById('jt-upi').value.trim();
+
                     // Join instantly
                     await setDoc(doc(db, 'tripMembers', `${tripId}_${state.user.uid}`), {
                         tripId, userId: state.user.uid, role: 'VIEWER',
                         name: state.user.displayName, email: state.user.email,
+                        upiId: upiId,
                         joinedAt: serverTimestamp()
                     });
+                    
+                    if (upiId) {
+                        await setDoc(doc(db, 'users', state.user.uid), { upiId: upiId }, { merge: true });
+                    }
 
                     ui.setLoading(false);
                     ui.hideModal('modal-join-trip');
@@ -2347,6 +2358,17 @@
                     // Simple styling override for me
                     const styleStr = isMePayer ? 'border-left: 4px solid var(--danger-color);' : (isMeReceiver ? 'border-left: 4px solid var(--success-color);' : '');
 
+                    let actionHtml = '';
+                    if (isMePayer && receiver.upiId) {
+                        actionHtml = `<a href="upi://pay?pa=${receiver.upiId}&pn=${encodeURIComponent(rName)}&am=${s.amount}&cu=INR" class="btn btn-primary text-xs w-full mt-2"><i class="fa-solid fa-qrcode"></i> Pay via UPI</a>`;
+                    } else if (isMeReceiver) {
+                        const myUpiId = receiver.upiId || '';
+                        const msg = `Hi ${pName}, please settle your pending dues of ₹${s.amount} for our trip. ${myUpiId ? 'My UPI ID is ' + myUpiId + '.' : ''}`;
+                        actionHtml = `<a href="https://wa.me/?text=${encodeURIComponent(msg)}" target="_blank" class="btn btn-success text-xs w-full mt-2"><i class="fa-brands fa-whatsapp"></i> Request via WA</a>`;
+                    } else if (receiver.upiId) {
+                        actionHtml = `<button class="btn btn-secondary text-xs w-full mt-2" onclick="app.copyText('${receiver.upiId}')"><i class="fa-solid fa-copy"></i> Copy UPI</button>`;
+                    }
+
                     container.innerHTML += `
                         <div class="card p-4 mb-3 flex flex-col md:flex-row justify-between items-center gap-4" style="${styleStr}">
                             <div class="flex items-center gap-4 w-full">
@@ -2362,7 +2384,7 @@
                             </div>
                             <div class="flex flex-col items-center md:items-end w-full md:w-auto">
                                 <div class="font-bold text-xl mb-2">${ui.formatCurrency(s.amount)}</div>
-                                ${receiver.upiId ? `<button class="btn btn-secondary text-xs w-full" onclick="app.copyText('${receiver.upiId}')"><i class="fa-solid fa-qrcode"></i> Copy UPI</button>` : ''}
+                                ${actionHtml}
                             </div>
                         </div>
                     `;
@@ -2383,24 +2405,32 @@
                 mySettlements.forEach(s => {
                     const isMePayer = s.payer === state.user.uid;
                     const otherId = isMePayer ? s.receiver : s.payer;
-                    const otherName = state.members.find(m => m.id === otherId)?.name || 'Unknown';
+                    const other = state.members.find(m => m.id === otherId) || {};
+                    const otherName = other.name || 'Unknown';
+                    const me = state.members.find(m => m.id === state.user.uid) || {};
                     
                     if (isMePayer) {
+                        const actionBtn = other.upiId ? `<a href="upi://pay?pa=${other.upiId}&pn=${encodeURIComponent(otherName)}&am=${s.amount}&cu=INR" class="btn btn-primary text-xs w-full mt-3"><i class="fa-solid fa-qrcode"></i> Pay via UPI App</a>` : '';
                         container.innerHTML += `
-                            <div class="data-item !p-3 flex justify-between items-center border-l-4" style="border-left-color: var(--danger-color)">
-                                <div>
+                            <div class="data-item !p-3 border-l-4" style="border-left-color: var(--danger-color)">
+                                <div class="flex justify-between items-center">
                                     <div class="font-medium">Payable to ${otherName}</div>
+                                    <div class="font-bold text-danger">₹${ui.formatCurrency(s.amount)}</div>
                                 </div>
-                                <div class="font-bold text-danger">₹${ui.formatCurrency(s.amount)}</div>
+                                ${actionBtn}
                             </div>
                         `;
                     } else {
+                        const myUpiId = me.upiId || '';
+                        const msg = `Hi ${otherName}, please settle your pending dues of ₹${s.amount} for our trip. ${myUpiId ? 'My UPI ID is ' + myUpiId + '.' : ''}`;
+                        const actionBtn = `<a href="https://wa.me/?text=${encodeURIComponent(msg)}" target="_blank" class="btn btn-success text-xs w-full mt-3"><i class="fa-brands fa-whatsapp"></i> Request via WhatsApp</a>`;
                         container.innerHTML += `
-                            <div class="data-item !p-3 flex justify-between items-center border-l-4" style="border-left-color: var(--success-color)">
-                                <div>
+                            <div class="data-item !p-3 border-l-4" style="border-left-color: var(--success-color)">
+                                <div class="flex justify-between items-center">
                                     <div class="font-medium">Receivable from ${otherName}</div>
+                                    <div class="font-bold text-success">₹${ui.formatCurrency(s.amount)}</div>
                                 </div>
-                                <div class="font-bold text-success">₹${ui.formatCurrency(s.amount)}</div>
+                                ${actionBtn}
                             </div>
                         `;
                     }
