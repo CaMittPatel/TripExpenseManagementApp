@@ -1059,6 +1059,37 @@
         </div>
     </div>
 
+    <!-- Detailed Ledger Modal -->
+    <div id="modal-detailed-ledger" class="modal-overlay">
+        <div class="modal-content" style="max-width: 800px;">
+            <div class="modal-header">
+                <h3 id="modal-ledger-title">Member Ledger 🧾</h3>
+                <button class="btn-icon" onclick="ui.hideModal('modal-detailed-ledger')"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body" style="overflow-x: auto; max-height: 60vh;">
+                <table class="w-full text-left border-collapse" style="min-width: 600px;">
+                    <thead>
+                        <tr class="border-b border-color text-secondary text-sm">
+                            <th class="py-2 px-3">Date</th>
+                            <th class="py-2 px-3">Category</th>
+                            <th class="py-2 px-3">Narration</th>
+                            <th class="py-2 px-3 text-right">Amount</th>
+                            <th class="py-2 px-3 text-right">Debit</th>
+                            <th class="py-2 px-3 text-right">Credit</th>
+                            <th class="py-2 px-3 text-right">Balance</th>
+                        </tr>
+                    </thead>
+                    <tbody id="detailed-ledger-tbody" class="text-sm">
+                        <!-- Populated by JS -->
+                    </tbody>
+                </table>
+            </div>
+            <div class="modal-footer justify-end">
+                <button class="btn btn-secondary" onclick="ui.hideModal('modal-detailed-ledger')">Close</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Toast Container -->
     <div id="toast-container"></div>
 
@@ -2300,7 +2331,7 @@
                             const netText = net > 0 ? 'Receivable' : (net < 0 ? 'Payable' : 'Settled');
                             
                             html += `
-                                <div class="card mb-4 border-l-4" style="border-left-color: ${net > 0 ? 'var(--success-color)' : (net < 0 ? 'var(--danger-color)' : 'gray')}">
+                                <div class="card mb-4 border-l-4 card-interactive cursor-pointer" style="border-left-color: ${net > 0 ? 'var(--success-color)' : (net < 0 ? 'var(--danger-color)' : 'gray')}" onclick="app.viewDetailedLedger('${m.id}')">
                                     <h4 class="font-bold text-lg mb-2">${m.name}</h4>
                                     <div class="grid grid-cols-3 gap-2 text-sm text-center">
                                         <div class="bg-surface-hover p-2 rounded">
@@ -2380,6 +2411,65 @@
                 }
 
                 container.innerHTML = html;
+            },
+
+            viewDetailedLedger: (memberId) => {
+                const member = state.members.find(m => m.id === memberId);
+                if(!member) return;
+                
+                document.getElementById('modal-ledger-title').innerText = `${member.name}'s Ledger 🧾`;
+                
+                // Combine expenses and contributions, sort by date then createdAt
+                let transactions = [...state.expenses].sort((a, b) => {
+                    const dateDiff = new Date(a.date) - new Date(b.date);
+                    if(dateDiff !== 0) return dateDiff;
+                    // Fallback to creation order if same date
+                    const aTime = a.createdAt?.seconds || 0;
+                    const bTime = b.createdAt?.seconds || 0;
+                    return aTime - bTime;
+                });
+
+                let balance = 0;
+                let tbodyHtml = '';
+
+                transactions.forEach(t => {
+                    let credit = 0; // Member Paid
+                    let debit = 0;  // Member Consumed
+
+                    if(t.paidBy === member.id) {
+                        credit = t.amount;
+                    }
+                    if(t.splitData && t.splitData[member.id]) {
+                        debit = t.splitData[member.id];
+                    }
+
+                    // Only show rows where member was involved
+                    if(credit === 0 && debit === 0) return;
+
+                    balance = balance + credit - debit;
+                    
+                    const isContribution = t.category === 'Contribution';
+                    const icon = isContribution ? 'fa-hand-holding-dollar text-success' : 'fa-receipt text-secondary';
+                    
+                    tbodyHtml += `
+                        <tr class="border-b border-color hover:bg-surface-hover transition-colors">
+                            <td class="py-3 px-3 text-secondary" style="white-space:nowrap;">${ui.formatDate(t.date)}</td>
+                            <td class="py-3 px-3"><i class="fa-solid ${icon} mr-2"></i>${t.category || 'Expense'}</td>
+                            <td class="py-3 px-3">${t.description}</td>
+                            <td class="py-3 px-3 text-right font-medium">${ui.formatCurrency(t.amount)}</td>
+                            <td class="py-3 px-3 text-right text-danger">${debit > 0 ? ui.formatCurrency(debit) : '-'}</td>
+                            <td class="py-3 px-3 text-right text-success">${credit > 0 ? ui.formatCurrency(credit) : '-'}</td>
+                            <td class="py-3 px-3 text-right font-bold" style="color: ${balance > 0 ? 'var(--success-color)' : (balance < 0 ? 'var(--danger-color)' : 'var(--text-primary)')}">${ui.formatCurrency(Math.abs(balance))} ${balance > 0 ? 'Dr' : (balance < 0 ? 'Cr' : '')}</td>
+                        </tr>
+                    `;
+                });
+
+                if(!tbodyHtml) {
+                    tbodyHtml = '<tr><td colspan="7" class="text-center py-6 text-secondary">No transactions found for this member.</td></tr>';
+                }
+
+                document.getElementById('detailed-ledger-tbody').innerHTML = tbodyHtml;
+                ui.showModal('modal-detailed-ledger');
             },
 
             exportCSV: () => {
