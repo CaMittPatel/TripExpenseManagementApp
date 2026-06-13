@@ -728,13 +728,18 @@
 
                 <!-- Expenses Tab -->
                 <div id="trip-tab-expenses" class="trip-tab-content hidden">
-                    <div class="flex justify-between items-center mb-4">
-                        <div class="flex gap-2">
-                            <input type="text" id="search-expenses" class="form-control" placeholder="Search..." style="max-width:200px;">
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
+                        <div class="flex gap-2 w-full md:w-auto">
+                            <input type="text" id="search-expenses" class="form-control w-full" placeholder="Search..." style="max-width:200px;">
                         </div>
-                        <button class="btn btn-primary btn-add-expense-req" onclick="app.openAddExpenseModal()">
-                            <i class="fa-solid fa-plus"></i> Add Expense
-                        </button>
+                        <div class="flex gap-2 w-full md:w-auto">
+                            <button class="btn btn-secondary btn-add-expense-req flex-1 md:flex-none" onclick="app.openAddContributionModal()">
+                                <i class="fa-solid fa-money-bill-transfer"></i> Contribution
+                            </button>
+                            <button class="btn btn-primary btn-add-expense-req flex-1 md:flex-none" onclick="app.openAddExpenseModal()">
+                                <i class="fa-solid fa-plus"></i> Add Expense
+                            </button>
+                        </div>
                     </div>
                     <div class="card p-0">
                         <div id="list-all-expenses" class="data-list" style="gap:0;">
@@ -918,6 +923,7 @@
                                 <option value="Entertainment">Entertainment</option>
                                 <option value="Shopping">Shopping</option>
                                 <option value="Miscellaneous">Miscellaneous</option>
+                                <option value="Contribution">Contribution / Advance</option>
                             </select>
                         </div>
                         <div class="form-group">
@@ -952,6 +958,40 @@
                     <button class="btn btn-secondary" onclick="ui.hideModal('modal-expense')">Cancel</button>
                     <button class="btn btn-primary" onclick="app.submitExpense()">Save</button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Contribution Modal -->
+    <div id="modal-contribution" class="modal-overlay">
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-header">
+                <h3>Add Contribution</h3>
+                <button class="btn-icon" onclick="ui.hideModal('modal-contribution')"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <form id="form-contribution">
+                    <div class="form-group">
+                        <label class="form-label">Amount (₹) *</label>
+                        <input type="number" id="con-amount" class="form-control" required min="0.01" step="0.01">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Paid By (Sender) *</label>
+                        <select id="con-sender" class="form-control" required></select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Paid To (Receiver) *</label>
+                        <select id="con-receiver" class="form-control" required></select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Date *</label>
+                        <input type="date" id="con-date" class="form-control" required>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="ui.hideModal('modal-contribution')">Cancel</button>
+                <button class="btn btn-primary" onclick="app.submitContribution()">Save Contribution</button>
             </div>
         </div>
     </div>
@@ -1652,6 +1692,69 @@
 
             // EXPENSE MANAGEMENT
             
+            openAddContributionModal: () => {
+                if(state.role === 'VIEWER' || state.currentTrip.status === 'Archived') return;
+
+                const form = document.getElementById('form-contribution');
+                form.reset();
+                
+                const sender = document.getElementById('con-sender');
+                const receiver = document.getElementById('con-receiver');
+                sender.innerHTML = '';
+                receiver.innerHTML = '';
+                
+                state.members.forEach(m => {
+                    const isYou = m.id === state.user.uid;
+                    const opt = `<option value="${m.id}" ${isYou ? 'selected' : ''}>${m.name} ${isYou ? '(You)' : ''}</option>`;
+                    sender.innerHTML += opt;
+                    receiver.innerHTML += `<option value="${m.id}">${m.name} ${isYou ? '(You)' : ''}</option>`;
+                });
+
+                document.getElementById('con-date').valueAsDate = new Date();
+                ui.showModal('modal-contribution');
+            },
+
+            submitContribution: async () => {
+                const amt = parseFloat(document.getElementById('con-amount').value);
+                const sender = document.getElementById('con-sender').value;
+                const receiver = document.getElementById('con-receiver').value;
+                const date = document.getElementById('con-date').value;
+
+                if(!amt || !sender || !receiver || !date) return ui.toast('Please fill all fields', 'error');
+                if(amt <= 0) return ui.toast('Amount must be greater than 0', 'error');
+                if(sender === receiver) return ui.toast('Sender and receiver cannot be the same', 'error');
+
+                const splitData = {};
+                splitData[receiver] = amt;
+
+                ui.setLoading(true);
+                try {
+                    const senderName = state.members.find(m => m.id === sender)?.name.split(' ')[0] || 'Unknown';
+                    const receiverName = state.members.find(m => m.id === receiver)?.name.split(' ')[0] || 'Unknown';
+
+                    const exData = {
+                        tripId: state.currentTripId,
+                        description: `Contribution: ${senderName} paid ${receiverName}`,
+                        amount: amt,
+                        date,
+                        category: 'Contribution',
+                        paidBy: sender,
+                        splitType: 'CUSTOM',
+                        splitData,
+                        createdBy: state.user.uid,
+                        createdAt: serverTimestamp(),
+                        updatedAt: serverTimestamp()
+                    };
+
+                    await setDoc(doc(collection(db, 'expenses')), exData);
+                    ui.toast('Contribution added');
+                    ui.hideModal('modal-contribution');
+                } catch(e) {
+                    ui.toast(e.message, 'error');
+                }
+                ui.setLoading(false);
+            },
+
             openAddExpenseModal: (expenseId = null) => {
                 if(state.role === 'VIEWER' || state.currentTrip.status === 'Archived') return;
 
