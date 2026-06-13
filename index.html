@@ -1708,7 +1708,9 @@
                 let youPaid = 0;
 
                 state.expenses.forEach(ex => {
-                    total += ex.amount;
+                    if (ex.category !== 'Contribution') {
+                        total += ex.amount;
+                    }
                     const mySplit = ex.splitData[state.user.uid] || 0;
                     yourShare += mySplit;
 
