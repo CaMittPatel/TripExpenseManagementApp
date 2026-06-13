@@ -1224,17 +1224,18 @@
                         return;
                     }
 
-                    // Fetch actual trip docs (In production with many trips, query in chunks of 10)
-                    const chunks = [];
-                    for(let i=0; i<tripIds.length; i+=10) {
-                        chunks.push(tripIds.slice(i, i+10));
-                    }
-                    
+                    // Fetch actual trip docs one by one to satisfy Firestore security rules
                     let allTrips = [];
-                    for(let chunk of chunks) {
-                        const tripQ = query(collection(db, 'trips'), where('__name__', 'in', chunk));
-                        const tripSnap = await getDocs(tripQ);
-                        tripSnap.forEach(t => allTrips.push({ id: t.id, ...t.data() }));
+                    try {
+                        const promises = tripIds.map(id => getDoc(doc(db, 'trips', id)));
+                        const docs = await Promise.all(promises);
+                        docs.forEach(t => {
+                            if (t.exists()) {
+                                allTrips.push({ id: t.id, ...t.data() });
+                            }
+                        });
+                    } catch(e) {
+                        console.error("Error fetching trips:", e);
                     }
 
                     // Merge roles into trip obj for easy access
